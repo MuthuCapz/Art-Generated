@@ -1,0 +1,33 @@
+// D:\art_generator\android\build.gradle
+
+buildscript {
+    ext.kotlin_version = '1.9.0' // Update with the latest stable version (check https://kotlinlang.org/docs/releases.html#release-details)
+    repositories {
+        google()
+        mavenCentral() // or jcenter() if necessary
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:7.0.4' // Use the appropriate version
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version" // Updated line
+        classpath 'com.google.gms:google-services:4.4.2' // Check for the latest version
+    }
+}
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+rootProject.buildDir = "../build"
+subprojects {
+    project.buildDir = "${rootProject.buildDir}/${project.name}"
+}
+subprojects {
+    project.evaluationDependsOn(":app")
+}
+
+tasks.register("clean", Delete) {
+    delete rootProject.buildDir
+}
