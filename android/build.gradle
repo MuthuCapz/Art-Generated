@@ -1,7 +1,7 @@
 // D:\art_generator\android\build.gradle
 
 buildscript {
-    ext.kotlin_version = '1.9.0' // Update with the latest stable version (check https://kotlinlang.org/docs/releases.html#release-details)
+    ext.kotlin_version = '2.1.0' // Update with the latest stable version (check https://kotlinlang.org/docs/releases.html#release-details)
     repositories {
         google()
         mavenCentral() // or jcenter() if necessary
