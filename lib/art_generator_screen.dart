@@ -1,5 +1,4 @@
 import 'package:art_generator/profile_page.dart';
-import 'package:art_generator/registration_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -42,7 +41,6 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
   bool _isLoading = false;
 
   final String _apiKey = 'ebc8659c-7b7c-4836-9e2f-5b8a10a48116';
-  final String _defaultImageUrl = 'https://www.example.com/placeholder.jpg';
 
   // Default to square
   Map<String, String> aspectRatioValues = {
@@ -311,316 +309,304 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async {
-        // Navigate to the RegistrationScreen
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => RegistrationScreen()),
-        );
-        return false; // Prevent the default back button behavior
-      },
-      child: Scaffold(
-        appBar: AppBar(
-          title: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'AI Image Generator', // Left side text
-                style: TextStyle(color: Colors.white),
-              ),
-              IconButton(
-                icon: Icon(Icons.menu, color: Colors.white), // Sidebar icon
-                onPressed: () {
-                  // Navigate to ProfilePage when the icon is clicked
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => ProfilePage()),
-                  );
-                },
-              ),
-            ],
-          ),
-          centerTitle: true,
-          backgroundColor: Colors.deepPurple,
+    return Scaffold(
+      appBar: AppBar(
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'AI Image Generator', // Left side text
+              style: TextStyle(color: Colors.white),
+            ),
+            IconButton(
+              icon: Icon(Icons.menu, color: Colors.white), // Sidebar icon
+              onPressed: () {
+                // Navigate to ProfilePage when the icon is clicked
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => ProfilePage()),
+                );
+              },
+            ),
+          ],
         ),
-        body: SingleChildScrollView(
-          controller: _scrollController,
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (_isLoading) Center(child: CircularProgressIndicator()),
-              Container(
-                width: double.infinity,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12.0),
-                  child: _generatedImageUrl != null
-                      ? AspectRatio(
-                          // Wrap with AspectRatio
-                          aspectRatio: _getAspectRatio(aspectRatioValues[
-                              selectedAspectRatio]!), // Use selected aspect ratio
-                          child: Image.network(
-                            _generatedImageUrl!,
-                            fit: BoxFit.cover,
-                            alignment:
-                                Alignment.center, // Important: Use BoxFit.cover
-                            loadingBuilder: (context, child, loadingProgress) {
-                              if (loadingProgress == null) return child;
-                              return Center(child: CircularProgressIndicator());
-                            },
-                            errorBuilder: (context, error, stackTrace) {
-                              return Center(
-                                child: Text(
-                                  'Failed to load image',
-                                  style: TextStyle(color: Colors.red),
-                                ),
-                              );
-                            },
-                          ),
-                        )
-                      : Image.asset(
-                          'assets/images/ai.jpg',
+        centerTitle: true,
+        backgroundColor: Colors.deepPurple,
+      ),
+      body: SingleChildScrollView(
+        controller: _scrollController,
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (_isLoading) Center(child: CircularProgressIndicator()),
+            Container(
+              width: double.infinity,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12.0),
+                child: _generatedImageUrl != null
+                    ? AspectRatio(
+                        // Wrap with AspectRatio
+                        aspectRatio: _getAspectRatio(aspectRatioValues[
+                            selectedAspectRatio]!), // Use selected aspect ratio
+                        child: Image.network(
+                          _generatedImageUrl!,
                           fit: BoxFit.cover,
+                          alignment:
+                              Alignment.center, // Important: Use BoxFit.cover
+                          loadingBuilder: (context, child, loadingProgress) {
+                            if (loadingProgress == null) return child;
+                            return Center(child: CircularProgressIndicator());
+                          },
+                          errorBuilder: (context, error, stackTrace) {
+                            return Center(
+                              child: Text(
+                                'Failed to load image',
+                                style: TextStyle(color: Colors.red),
+                              ),
+                            );
+                          },
                         ),
+                      )
+                    : Image.asset(
+                        'assets/images/ai.jpg',
+                        fit: BoxFit.cover,
+                      ),
+              ),
+            ),
+            SizedBox(height: 16), // Added spacing between image and buttons
+            if (_generatedImageUrl != null)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  ElevatedButton.icon(
+                    onPressed: _saveImage, // Call the save function
+                    icon: Icon(Icons.save),
+                    label: Text('Save'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.deepPurple,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: _shareImage, // Call the share function
+                    icon: Icon(Icons.share),
+                    label: Text('Share'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.deepPurple,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            SizedBox(height: 8),
+            Text(
+              "Enter image description",
+              style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black),
+            ),
+            SizedBox(height: 8),
+            Text(
+              "Note: The more detailed the description, the more optimal the image creation will be.",
+              style: TextStyle(color: Colors.grey, fontSize: 14),
+            ),
+            SizedBox(height: 16),
+            TextField(
+              controller: _textController,
+              focusNode: _focusNode,
+              maxLines: null,
+              minLines: 5,
+              maxLength: 500,
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.black,
+              ),
+              decoration: InputDecoration(
+                hintText: "Type your description...",
+                hintStyle: TextStyle(
+                  color: Colors.grey[600],
+                ),
+                filled: true,
+                fillColor: Colors.grey[100],
+                // Soft background color
+                contentPadding: EdgeInsets.symmetric(
+                  vertical: 20, // Adjust height
+                  horizontal: 16, // Adjust horizontal padding
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(20.0), // Rounded corners
+                  borderSide: BorderSide.none,
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(20.0),
+                  borderSide: BorderSide(
+                    color: Colors.deepPurple,
+                    width: 2.0,
+                  ),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(20.0),
+                  borderSide: BorderSide(
+                    color: Colors.grey[300]!,
+                    width: 1.0,
+                  ),
+                ),
+                errorBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(20.0),
+                  borderSide: BorderSide(
+                    color: Colors.red,
+                    width: 1.0,
+                  ),
                 ),
               ),
-              SizedBox(height: 16), // Added spacing between image and buttons
-              if (_generatedImageUrl != null)
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    ElevatedButton.icon(
-                      onPressed: _saveImage, // Call the save function
-                      icon: Icon(Icons.save),
-                      label: Text('Save'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.deepPurple,
-                        foregroundColor: Colors.white,
-                      ),
-                    ),
-                    ElevatedButton.icon(
-                      onPressed: _shareImage, // Call the share function
-                      icon: Icon(Icons.share),
-                      label: Text('Share'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.deepPurple,
-                        foregroundColor: Colors.white,
-                      ),
-                    ),
-                  ],
-                ),
-              SizedBox(height: 8),
-              Text(
-                "Enter image description",
-                style: TextStyle(
+              onChanged: (value) {
+                if (value.length > 500) {
+                  _textController.text = value.substring(0, 500);
+                  _textController.selection =
+                      TextSelection.collapsed(offset: 500);
+                  showToast("Maximum character limit reached!");
+                }
+              },
+              onSubmitted: (_) {
+                final prompt = _textController.text.trim();
+                if (isValidPrompt(prompt)) {
+                  _focusNode.unfocus();
+                  final aspectRatio = selectedAspectRatio.isNotEmpty
+                      ? selectedAspectRatio
+                      : '1:1'; // Default to 1:1 if none selected
+                  generateArt(prompt, aspectRatio);
+                } else {
+                  showToast("Input should be 500 characters or less");
+                }
+              },
+            ),
+            SizedBox(height: 16),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Select Style',
+                  style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
-                    color: Colors.black),
-              ),
-              SizedBox(height: 8),
-              Text(
-                "Note: The more detailed the description, the more optimal the image creation will be.",
-                style: TextStyle(color: Colors.grey, fontSize: 14),
-              ),
-              SizedBox(height: 16),
-              TextField(
-                controller: _textController,
-                focusNode: _focusNode,
-                maxLines: null,
-                minLines: 5,
-                maxLength: 500,
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.black,
-                ),
-                decoration: InputDecoration(
-                  hintText: "Type your description...",
-                  hintStyle: TextStyle(
-                    color: Colors.grey[600],
-                  ),
-                  filled: true,
-                  fillColor: Colors.grey[100],
-                  // Soft background color
-                  contentPadding: EdgeInsets.symmetric(
-                    vertical: 20, // Adjust height
-                    horizontal: 16, // Adjust horizontal padding
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius:
-                        BorderRadius.circular(20.0), // Rounded corners
-                    borderSide: BorderSide.none,
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(20.0),
-                    borderSide: BorderSide(
-                      color: Colors.deepPurple,
-                      width: 2.0,
-                    ),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(20.0),
-                    borderSide: BorderSide(
-                      color: Colors.grey[300]!,
-                      width: 1.0,
-                    ),
-                  ),
-                  errorBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(20.0),
-                    borderSide: BorderSide(
-                      color: Colors.red,
-                      width: 1.0,
-                    ),
+                    color: Colors.black,
                   ),
                 ),
-                onChanged: (value) {
-                  if (value.length > 500) {
-                    _textController.text = value.substring(0, 500);
-                    _textController.selection =
-                        TextSelection.collapsed(offset: 500);
-                    showToast("Maximum character limit reached!");
-                  }
-                },
-                onSubmitted: (_) {
-                  final prompt = _textController.text.trim();
-                  if (isValidPrompt(prompt)) {
-                    _focusNode.unfocus();
-                    final aspectRatio = selectedAspectRatio.isNotEmpty
-                        ? selectedAspectRatio
-                        : '1:1'; // Default to 1:1 if none selected
-                    generateArt(prompt, aspectRatio);
-                  } else {
-                    showToast("Input should be 500 characters or less");
-                  }
-                },
-              ),
-              SizedBox(height: 16),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Select Style',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black,
+                SizedBox(height: 8),
+                GridView.builder(
+                  shrinkWrap:
+                      true, // Ensures GridView doesn't take infinite height
+                  physics:
+                      NeverScrollableScrollPhysics(), // Disable scrolling inside the GridView
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2, // 2 images per row
+                    crossAxisSpacing: 8.0, // Spacing between columns
+                    mainAxisSpacing: 8.0, // Spacing between rows
+                    childAspectRatio: 1, // Ensures square images
+                  ),
+                  itemCount: styles.length > 6
+                      ? 6
+                      : styles.length, // Ensure only 6 items are displayed
+                  itemBuilder: (context, index) {
+                    return buildStyleButton(styles[index]);
+                  },
+                ),
+              ],
+            ),
+
+            SizedBox(height: 16),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Aspect Ratio',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black,
+                  ),
+                ),
+                SizedBox(height: 8),
+                Padding(
+                  padding:
+                      const EdgeInsets.all(1.0), // Increased padding all around
+                  child: Material(
+                    elevation: 4.0,
+                    borderRadius: BorderRadius.circular(8.0),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8.0),
+                        color: Colors.white,
+                        border: Border.all(
+                            color: Colors.grey[300]!), // Added border
+                      ),
+                      padding:
+                          const EdgeInsets.all(12.0), // Increased inner padding
+                      child: Row(
+                        mainAxisSize:
+                            MainAxisSize.max, // Ensure Row takes full width
+                        children: [
+                          Expanded(
+                            child: buildAspectRatioButton('square', '1:1'),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: buildAspectRatioButton('portrait', '9:16'),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: buildAspectRatioButton('landscape', '16:9'),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                  SizedBox(height: 8),
-                  GridView.builder(
-                    shrinkWrap:
-                        true, // Ensures GridView doesn't take infinite height
-                    physics:
-                        NeverScrollableScrollPhysics(), // Disable scrolling inside the GridView
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2, // 2 images per row
-                      crossAxisSpacing: 8.0, // Spacing between columns
-                      mainAxisSpacing: 8.0, // Spacing between rows
-                      childAspectRatio: 1, // Ensures square images
+                ),
+              ],
+            ),
+            SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    icon: Icon(Icons.clear_all, color: Colors.white),
+                    label: Text('Clear all',
+                        style: TextStyle(color: Colors.white)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.grey,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12.0),
+                      ),
                     ),
-                    itemCount: styles.length > 6
-                        ? 6
-                        : styles.length, // Ensure only 6 items are displayed
-                    itemBuilder: (context, index) {
-                      return buildStyleButton(styles[index]);
+                    onPressed: () {
+                      _textController.clear();
+                      setState(() {
+                        _generatedImageUrl = null;
+                      });
                     },
                   ),
-                ],
-              ),
-
-              SizedBox(height: 16),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Aspect Ratio',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black,
-                    ),
-                  ),
-                  SizedBox(height: 8),
-                  Padding(
-                    padding: const EdgeInsets.all(
-                        1.0), // Increased padding all around
-                    child: Material(
-                      elevation: 4.0,
-                      borderRadius: BorderRadius.circular(8.0),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(8.0),
-                          color: Colors.white,
-                          border: Border.all(
-                              color: Colors.grey[300]!), // Added border
-                        ),
-                        padding: const EdgeInsets.all(
-                            12.0), // Increased inner padding
-                        child: Row(
-                          mainAxisSize:
-                              MainAxisSize.max, // Ensure Row takes full width
-                          children: [
-                            Expanded(
-                              child: buildAspectRatioButton('square', '1:1'),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: buildAspectRatioButton('portrait', '9:16'),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child:
-                                  buildAspectRatioButton('landscape', '16:9'),
-                            ),
-                          ],
-                        ),
+                ),
+                SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    icon: Icon(Icons.image, color: Colors.white),
+                    label:
+                        Text('Generate', style: TextStyle(color: Colors.white)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.deepPurple,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12.0),
                       ),
                     ),
+                    onPressed: _onGenerateButtonPressed,
                   ),
-                ],
-              ),
-              SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      icon: Icon(Icons.clear_all, color: Colors.white),
-                      label: Text('Clear all',
-                          style: TextStyle(color: Colors.white)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.grey,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12.0),
-                        ),
-                      ),
-                      onPressed: () {
-                        _textController.clear();
-                        setState(() {
-                          _generatedImageUrl = null;
-                        });
-                      },
-                    ),
-                  ),
-                  SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      icon: Icon(Icons.image, color: Colors.white),
-                      label: Text('Generate',
-                          style: TextStyle(color: Colors.white)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.deepPurple,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12.0),
-                        ),
-                      ),
-                      onPressed: _onGenerateButtonPressed,
-                    ),
-                  ),
-                ],
-              ),
-              SizedBox(height: 20), // Reduced spacing
-            ],
-          ),
+                ),
+              ],
+            ),
+            SizedBox(height: 20), // Reduced spacing
+          ],
         ),
       ),
     );

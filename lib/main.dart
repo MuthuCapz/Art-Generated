@@ -5,10 +5,10 @@ import 'package:firebase_core/firebase_core.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized(); // Ensures Flutter engine is ready
   await Firebase.initializeApp(); // Initialize Firebase
-  runApp(VaultCashApp());
+  runApp(GenifyApp());
 }
 
-class VaultCashApp extends StatelessWidget {
+class GenifyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(

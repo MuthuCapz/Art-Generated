@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'art_generator_screen.dart';
 import 'registration_screen.dart';
 
 class SplashScreen extends StatelessWidget {
@@ -35,14 +37,13 @@ class SplashScreen extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               // Row with circular image and text
-
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   // Circular image
                   ClipOval(
                     child: Image.asset(
-                      'assets/images/Genify-Ai.png', // Replace with your logo image asset
+                      'assets/images/Genify-Ai.png',
                       height: 70,
                       width: 70,
                       fit: BoxFit.cover,
@@ -75,15 +76,25 @@ class SplashScreen extends StatelessWidget {
               // Get started button
               ElevatedButton(
                 onPressed: () {
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(
-                        builder: (context) => RegistrationScreen()),
-                  );
+                  User? user = FirebaseAuth.instance.currentUser;
+                  if (user != null) {
+                    // User is already signed in, navigate to Main Page
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(
+                          builder: (context) => ArtGeneratorScreen()),
+                    );
+                  } else {
+                    // User is not signed in, navigate to Registration Screen
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(
+                          builder: (context) => RegistrationScreen()),
+                    );
+                  }
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor:
-                      Colors.transparent, // Make background transparent
+                  backgroundColor: Colors.transparent, // Transparent background
                   shadowColor: Colors.transparent, // Remove shadow
                   side: BorderSide(
                     color: Colors.blue, // Stroke color

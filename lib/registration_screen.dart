@@ -1,5 +1,3 @@
-import 'package:art_generator/splash_screen.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -77,12 +75,29 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
 
   GoogleSignIn _googleSignIn = GoogleSignIn();
 
+  @override
+  void initState() {
+    super.initState();
+    _signOutGoogle(); // Sign out Google on page load
+  }
+
+// Method to sign out from Google and Firebase
+  Future<void> _signOutGoogle() async {
+    try {
+      await _googleSignIn.signOut(); // Sign out from Google
+      await _auth.signOut(); // Sign out from Firebase
+    } catch (e) {
+      print("Google Sign-Out Error: $e");
+    }
+  }
+
   Future<String> generateUserID() async {
     final usersRef = FirebaseFirestore.instance.collection('users');
     final querySnapshot = await usersRef.get();
-    int userCount = querySnapshot.size + 1; // Increment count
 
-    return 'aiuser${userCount.toString().padLeft(3, '0')}'; // aiuser001, aiuser002...
+    int userCount = querySnapshot.size; // Get current user count
+
+    return 'aiuser${(userCount + 1).toString().padLeft(3, '0')}'; // Ensures aiuser001 is first
   }
 
   // Method to handle Google Sign-In
@@ -107,14 +122,23 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         String formattedDate =
             DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now());
 
-        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-          'email': user.email,
-          'profile': user.photoURL ?? '',
-          'username': user.displayName ?? '',
-          'loginDateTime': formattedDate,
-          'userID': userID,
-          'uid': user.uid,
-        });
+        DocumentSnapshot userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
+        if (!userDoc.exists) {
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .set({
+            'email': user.email,
+            'profile': user.photoURL ?? '',
+            'username': user.displayName ?? '',
+            'loginDateTime': formattedDate,
+            'userID': userID,
+            'uid': user.uid,
+          });
+        }
 
         ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Google Sign-In successful!')));
@@ -132,68 +156,87 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     try {
-      UserCredential userCredential =
-          await _auth.createUserWithEmailAndPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
-      );
-
-      User? user = userCredential.user;
-      if (user != null) {
-        String userID = await generateUserID(); // Generate user ID
-        String formattedDate =
-            DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now());
-
-        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-          'email': _emailController.text.trim(),
-          'profile': '',
-          'username': _usernameController.text.trim(),
-          'loginDateTime': formattedDate,
-          'userID': userID,
-          'uid': user.uid,
-        });
-
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Registration successful!')));
-        Navigator.pushReplacement(context,
-            MaterialPageRoute(builder: (context) => ArtGeneratorScreen()));
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Registration failed: $e')));
-    }
-  }
-
-  // Method to handle email/password login
-  Future<void> _signInWithEmailAndPassword() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    try {
+      // Try to sign in with email and password
       UserCredential userCredential = await _auth.signInWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
 
+      // If user exists, fetch data from Firestore
       User? user = userCredential.user;
       if (user != null) {
-        String formattedDate =
-            DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now());
-
-        await FirebaseFirestore.instance
+        // Fetch the stored password from Firestore
+        DocumentSnapshot userDoc = await FirebaseFirestore.instance
             .collection('users')
             .doc(user.uid)
-            .update({
-          'loginDateTime': formattedDate, // Update last login time
-        });
+            .get();
 
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Login successful!')));
-        Navigator.pushReplacement(context,
-            MaterialPageRoute(builder: (context) => ArtGeneratorScreen()));
+        // Check if the stored password matches the entered password
+        String storedPassword = userDoc['password'];
+
+        if (storedPassword == _passwordController.text.trim()) {
+          // Password matches, navigate to the main page
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text('Login successful!')));
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => ArtGeneratorScreen()),
+          );
+        } else {
+          // Password doesn't match, show error message
+          ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Incorrect password, please try again.')));
+        }
       }
     } catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Login failed: $e')));
+      // If the user does not exist (sign-in failed), create a new account
+      if (e.toString().contains('user-not-found')) {
+        try {
+          // Create new user if not found
+          UserCredential newUserCredential =
+              await _auth.createUserWithEmailAndPassword(
+            email: _emailController.text.trim(),
+            password: _passwordController.text.trim(),
+          );
+
+          User? newUser = newUserCredential.user;
+          if (newUser != null) {
+            // Generate a unique userID and current timestamp
+            String userID = await generateUserID();
+            String formattedDate =
+                DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now());
+
+            // Store the new user's details in Firestore (including the password for validation)
+            await FirebaseFirestore.instance
+                .collection('users')
+                .doc(newUser.uid)
+                .set({
+              'email': _emailController.text.trim(),
+              'profile': '', // Optional field
+              'username': _usernameController.text.trim(),
+              'loginDateTime': formattedDate,
+              'userID': userID,
+              'uid': newUser.uid,
+              'createdAt': formattedDate,
+            });
+
+            ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Account created successfully!')));
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => ArtGeneratorScreen()),
+            );
+          }
+        } catch (e) {
+          // Handle registration error
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text('Registration failed: $e')));
+        }
+      } else {
+        // Handle other errors (e.g., incorrect email/password format)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Login failed: $e')));
+      }
     }
   }
 
@@ -201,10 +244,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   Widget build(BuildContext context) {
     return WillPopScope(
       onWillPop: () async {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => SplashScreen()),
-        );
+        Navigator.pop(context);
         return false;
       },
       child: Scaffold(
