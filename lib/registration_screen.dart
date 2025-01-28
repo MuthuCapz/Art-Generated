@@ -1,3 +1,5 @@
+import 'package:art_generator/splash_screen.dart';
+
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -214,10 +216,11 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
               'email': _emailController.text.trim(),
               'profile': '', // Optional field
               'username': _usernameController.text.trim(),
+              'password': _passwordController.text
+                  .trim(), // Store password for later validation
               'loginDateTime': formattedDate,
               'userID': userID,
               'uid': newUser.uid,
-              'createdAt': formattedDate,
             });
 
             ScaffoldMessenger.of(context).showSnackBar(
