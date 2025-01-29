@@ -2,6 +2,7 @@ import 'package:art_generator/profile_page.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:image_gallery_saver/image_gallery_saver.dart';
 import 'package:share_plus/share_plus.dart';
@@ -39,8 +40,36 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
   String selectedAspectRatio = 'square';
   String? _generatedImageUrl;
   bool _isLoading = false;
+  String? _apiKey;
 
-  final String _apiKey = 'ebc8659c-7b7c-4836-9e2f-5b8a10a48116';
+  // Firestore reference
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchApiKey(); // Fetch API key when the widget is initialized
+  }
+
+  // Fetch the API key from Firestore
+  Future<void> _fetchApiKey() async {
+    try {
+      DocumentSnapshot doc = await _firestore
+          .collection('api_keys')
+          .doc('4p5Cq6LY4o7h5iLBIYTo')
+          .get();
+      if (doc.exists) {
+        setState(() {
+          _apiKey =
+              doc['key']; // Assuming 'key' is the field name for the API key
+        });
+      } else {
+        showToast("API key not found in Firestore.");
+      }
+    } catch (e) {
+      showToast("Error fetching API key: $e");
+    }
+  }
 
   // Default to square
   Map<String, String> aspectRatioValues = {
@@ -226,6 +255,10 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
   }
 
   Future<void> generateArt(String prompt, String aspectRatioName) async {
+    if (_apiKey == null) {
+      showToast("API key is not available.");
+      return;
+    }
     String aspectRatio = aspectRatioValues[aspectRatioName]!;
     setState(() {
       _isLoading = true;
@@ -237,7 +270,7 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
     try {
       final response = await http.post(
         Uri.parse(apiUrl),
-        headers: {'Api-Key': _apiKey},
+        headers: {'Api-Key': _apiKey!},
         body: {
           'text': prompt,
           'aspect_ratio': aspectRatio, // Pass the aspect ratio

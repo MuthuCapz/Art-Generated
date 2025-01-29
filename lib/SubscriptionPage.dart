@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:ui';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class SubscriptionPage extends StatefulWidget {
   @override
@@ -131,12 +133,12 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                     ),
                     SizedBox(height: 50),
 
-                    /// **Continue Button with Dynamic Padding**
+                    /// **Continue Button with Firestore Integration**
                     Padding(
                       padding: EdgeInsets.only(bottom: bottomPadding + 16),
                       child: ElevatedButton(
                         onPressed: () {
-                          // Handle continue action
+                          saveSubscriptionPlan();
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.deepPurple,
@@ -165,6 +167,51 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
     );
   }
 
+  /// **Firestore Function to Save Subscription Plan**
+  void saveSubscriptionPlan() async {
+    User? user = FirebaseAuth.instance.currentUser; // Get Current User
+    if (user == null) {
+      print("User not logged in");
+      return;
+    }
+
+    String uid = user.uid; // Get user ID
+    Map<String, dynamic> subscriptionData = {};
+
+    // Determine selected plan details
+    if (selectedPlan == 'yearly') {
+      subscriptionData = {
+        "title": "\$99.98 / year",
+        "subtitle":
+            "• 100 AI Image Generator calls\n• Billed and recurring yearly\n• Cancel anytime",
+      };
+    } else if (selectedPlan == 'quarterly') {
+      subscriptionData = {
+        "title": "\$29.98 / 3 months",
+        "subtitle":
+            "• 100 AI Image Generator calls\n• Billed and recurring every 3 months\n• Cancel anytime",
+      };
+    } else if (selectedPlan == 'monthly') {
+      subscriptionData = {
+        "title": "\$9.98 / month",
+        "subtitle":
+            "• 100 AI Image Generator calls\n• Billed and recurring monthly\n• Cancel anytime",
+      };
+    }
+
+    try {
+      await FirebaseFirestore.instance
+          .collection("subscription")
+          .doc(uid)
+          .set(subscriptionData);
+
+      print("Subscription saved successfully!");
+    } catch (e) {
+      print("Error saving subscription: $e");
+    }
+  }
+
+  /// **Widget to Build Subscription Plan Option**
   Widget _buildSubscriptionOption({
     required String title,
     required String subtitle,
