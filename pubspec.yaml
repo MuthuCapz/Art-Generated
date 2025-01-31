@@ -24,6 +24,11 @@ dependencies:
   cloud_firestore: ^5.6.2
   provider: ^6.1.2
   intl: ^0.20.2
+  encrypt: ^5.0.3
+  flutter_secure_storage: ^9.2.4
+  crypto: ^3.0.0
+  bcrypt: ^1.1.3
+  cryptography: ^2.7.0
 
 dev_dependencies:
   flutter_test:

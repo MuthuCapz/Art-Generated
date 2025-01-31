@@ -9,6 +9,8 @@ import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 
+import 'encryption_helper.dart';
+
 void main() => runApp(ArtGeneratorApp());
 
 class ArtGeneratorApp extends StatelessWidget {
@@ -51,17 +53,21 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
     _fetchApiKey(); // Fetch API key when the widget is initialized
   }
 
-  // Fetch the API key from Firestore
+  // Fetch the encrypted API key from Firestore and decrypt it
   Future<void> _fetchApiKey() async {
     try {
       DocumentSnapshot doc = await _firestore
-          .collection('api_keys')
-          .doc('4p5Cq6LY4o7h5iLBIYTo')
+          .collection('secure')
+          .doc('ltVaek1ZaAsbJ8YehI5J')
           .get();
+
       if (doc.exists) {
+        String encryptedKey = doc['key']; // Fetch encrypted key from Firestore
+        String decryptedKey =
+            EncryptionHelper.decryptData(encryptedKey); // Decrypt it
+
         setState(() {
-          _apiKey =
-              doc['key']; // Assuming 'key' is the field name for the API key
+          _apiKey = decryptedKey; // Store decrypted key
         });
       } else {
         showToast("API key not found in Firestore.");
