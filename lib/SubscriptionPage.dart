@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'dart:ui';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:intl/intl.dart';
+import 'package:razorpay_flutter/razorpay_flutter.dart';
+import 'art_generator_screen.dart';
+import 'encryption_helper.dart';
 
 class SubscriptionPage extends StatefulWidget {
   @override
@@ -10,6 +14,107 @@ class SubscriptionPage extends StatefulWidget {
 
 class _SubscriptionPageState extends State<SubscriptionPage> {
   String selectedPlan = 'yearly'; // Default selected plan
+  Razorpay? _razorpay;
+  String razorpayKey = ''; // Store decrypted Razorpay Key
+
+  @override
+  void initState() {
+    super.initState();
+    _razorpay = Razorpay();
+    _razorpay?.on(Razorpay.EVENT_PAYMENT_SUCCESS, _handlePaymentSuccess);
+    _razorpay?.on(Razorpay.EVENT_PAYMENT_ERROR, _handlePaymentError);
+    _razorpay?.on(Razorpay.EVENT_EXTERNAL_WALLET, _handleExternalWallet);
+
+    fetchRazorpayKey().then((_) {
+      print("Razorpay key fetched: $razorpayKey"); // Debugging
+    });
+  }
+
+  @override
+  void dispose() {
+    _razorpay?.clear();
+    super.dispose();
+  }
+
+  Future<void> fetchRazorpayKey() async {
+    try {
+      DocumentSnapshot doc = await FirebaseFirestore.instance
+          .collection('secure')
+          .doc('ltVaek1ZaAsbJ8YehI5J')
+          .get();
+
+      if (doc.exists) {
+        String encryptedKey = doc['key1']; // Fetch encrypted key from Firestore
+        String decryptedKey =
+            EncryptionHelper.decryptData(encryptedKey); // Decrypt it
+
+        setState(() {
+          razorpayKey = decryptedKey;
+        });
+      } else {
+        print("No Razorpay key found.");
+      }
+    } catch (e) {
+      print("Error fetching Razorpay key: $e");
+    }
+  }
+
+  void startPayment() {
+    if (razorpayKey.isEmpty) {
+      print("Razorpay key is empty, cannot proceed with payment.");
+      return;
+    }
+
+    print("Using Razorpay Key: $razorpayKey"); // Debugging purpose
+
+    var options = {
+      'key': razorpayKey, // Use the decrypted Razorpay key
+      'amount': getAmount(selectedPlan), // Convert amount to paisa
+      'name': 'Genify AI',
+      'description': 'Subscription Plan',
+    };
+
+    try {
+      _razorpay?.open(options);
+    } catch (e) {
+      print("Error starting payment: $e");
+    }
+  }
+
+  /// **Handle Successful Payment**
+  void _handlePaymentSuccess(PaymentSuccessResponse response) {
+    print("Payment Successful: ${response.paymentId}");
+    saveSubscriptionPlan("success"); // Save the subscription to Firestore
+  }
+
+  /// **Handle Payment Failure**
+  void _handlePaymentError(PaymentFailureResponse response) {
+    print("Payment Failed: ${response.message}");
+    saveSubscriptionPlan("failure");
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => ArtGeneratorScreen()),
+    );
+  }
+
+  /// **Handle External Wallet Payment**
+  void _handleExternalWallet(ExternalWalletResponse response) {
+    print("External Wallet Used: ${response.walletName}");
+  }
+
+  int getAmount(String plan) {
+    switch (plan) {
+      case 'yearly':
+        return 9998 * 100; // Convert dollars to paisa
+      case 'quarterly':
+        return 2998 * 100;
+      case 'monthly':
+        return 998 * 100;
+      default:
+        return 0;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -137,8 +242,11 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                     Padding(
                       padding: EdgeInsets.only(bottom: bottomPadding + 16),
                       child: ElevatedButton(
-                        onPressed: () {
-                          saveSubscriptionPlan();
+                        onPressed: () async {
+                          if (razorpayKey.isEmpty) {
+                            await fetchRazorpayKey();
+                          }
+                          startPayment();
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.deepPurple,
@@ -168,7 +276,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
   }
 
   /// **Firestore Function to Save Subscription Plan**
-  void saveSubscriptionPlan() async {
+  void saveSubscriptionPlan(String paymentResult) async {
     User? user = FirebaseAuth.instance.currentUser; // Get Current User
     if (user == null) {
       print("User not logged in");
@@ -178,24 +286,35 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
     String uid = user.uid; // Get user ID
     Map<String, dynamic> subscriptionData = {};
 
+    // Get current DateTime and format it
+    DateTime now = DateTime.now();
+    String formattedDateTime =
+        DateFormat('MMMM d, y \'at\' h:mm:ss a').format(now);
+
     // Determine selected plan details
     if (selectedPlan == 'yearly') {
       subscriptionData = {
         "title": "\$99.98 / year",
         "subtitle":
             "• 100 AI Image Generator calls\n• Billed and recurring yearly\n• Cancel anytime",
+        "paymentResult": paymentResult, // Store payment result
+        "subscriptionDateTime": formattedDateTime,
       };
     } else if (selectedPlan == 'quarterly') {
       subscriptionData = {
         "title": "\$29.98 / 3 months",
         "subtitle":
             "• 100 AI Image Generator calls\n• Billed and recurring every 3 months\n• Cancel anytime",
+        "paymentResult": paymentResult, // Store payment result
+        "subscriptionDateTime": formattedDateTime,
       };
     } else if (selectedPlan == 'monthly') {
       subscriptionData = {
         "title": "\$9.98 / month",
         "subtitle":
             "• 100 AI Image Generator calls\n• Billed and recurring monthly\n• Cancel anytime",
+        "paymentResult": paymentResult, // Store payment result
+        "subscriptionDateTime": formattedDateTime,
       };
     }
 

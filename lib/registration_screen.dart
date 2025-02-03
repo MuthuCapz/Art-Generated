@@ -77,22 +77,6 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
 
   GoogleSignIn _googleSignIn = GoogleSignIn();
 
-  @override
-  void initState() {
-    super.initState();
-    _signOutGoogle(); // Sign out Google on page load
-  }
-
-// Method to sign out from Google and Firebase
-  Future<void> _signOutGoogle() async {
-    try {
-      await _googleSignIn.signOut(); // Sign out from Google
-      await _auth.signOut(); // Sign out from Firebase
-    } catch (e) {
-      print("Google Sign-Out Error: $e");
-    }
-  }
-
   Future<String> generateUserID() async {
     final usersRef = FirebaseFirestore.instance.collection('users');
     final querySnapshot = await usersRef.get();
@@ -105,8 +89,10 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   // Method to handle Google Sign-In
   Future<void> _signInWithGoogle() async {
     try {
+      await _googleSignIn.signOut();
+
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-      if (googleUser == null) return;
+      if (googleUser == null) return; // User canceled sign-in
 
       final GoogleSignInAuthentication googleAuth =
           await googleUser.authentication;
@@ -120,126 +106,125 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       User? user = userCredential.user;
 
       if (user != null) {
-        String userID = await generateUserID(); // Generate unique user ID
         String formattedDate =
             DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now());
 
-        DocumentSnapshot userDoc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .get();
-        if (!userDoc.exists) {
-          await FirebaseFirestore.instance
-              .collection('users')
-              .doc(user.uid)
-              .set({
+        DocumentReference userDocRef =
+            FirebaseFirestore.instance.collection('users').doc(user.uid);
+        DocumentSnapshot userDoc = await userDocRef.get();
+
+        if (userDoc.exists) {
+          // Update login date for existing user
+          await userDocRef.update({'loginDateTime': formattedDate});
+        } else {
+          // New user: Generate unique ID and store details
+          String userID =
+              await generateUserID(); // Ensure this generates a unique value
+
+          await userDocRef.set({
             'email': user.email,
             'profile': user.photoURL ?? '',
             'username': user.displayName ?? '',
             'loginDateTime': formattedDate,
             'userID': userID,
             'uid': user.uid,
-          });
+          }, SetOptions(merge: true)); // Merges instead of overwriting
         }
 
         ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Google Sign-In successful!')));
-        Navigator.pushReplacement(context,
-            MaterialPageRoute(builder: (context) => ArtGeneratorScreen()));
+          SnackBar(content: Text('Google Sign-In successful!')),
+        );
+
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => ArtGeneratorScreen()),
+        );
       }
     } catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Google Sign-In failed: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Google Sign-In failed: $e')),
+      );
     }
   }
 
-  // Method to handle regular email/password registration
   Future<void> _registerAccount() async {
     if (!_formKey.currentState!.validate()) return;
 
+    String email = _emailController.text.trim();
+    String password = _passwordController.text.trim();
+
     try {
-      // Try to sign in with email and password
-      UserCredential userCredential = await _auth.signInWithEmailAndPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
-      );
+      // Check if the user already exists in Firestore
+      QuerySnapshot userQuery = await FirebaseFirestore.instance
+          .collection('users')
+          .where('email', isEqualTo: email)
+          .get();
 
-      // If user exists, fetch data from Firestore
-      User? user = userCredential.user;
-      if (user != null) {
-        // Fetch the stored password from Firestore
-        DocumentSnapshot userDoc = await FirebaseFirestore.instance
+      if (userQuery.docs.isNotEmpty) {
+        // User exists, update loginDateTime
+        DocumentSnapshot userDoc = userQuery.docs.first;
+        String userId = userDoc.id; // Get Firestore document ID
+
+        await FirebaseFirestore.instance
             .collection('users')
-            .doc(user.uid)
-            .get();
+            .doc(userId)
+            .update({
+          'loginDateTime':
+              DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now()),
+        });
 
-        // Check if the stored password matches the entered password
-        String storedPassword = userDoc['password'];
+        // Sign in the user
+        await _auth.signInWithEmailAndPassword(
+            email: email, password: password);
 
-        if (storedPassword == _passwordController.text.trim()) {
-          // Password matches, navigate to the main page
-          ScaffoldMessenger.of(context)
-              .showSnackBar(SnackBar(content: Text('Login successful!')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Login successful!')),
+        );
+
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => ArtGeneratorScreen()),
+        );
+      } else {
+        // If user does not exist, create a new account
+        UserCredential newUserCredential = await _auth
+            .createUserWithEmailAndPassword(email: email, password: password);
+
+        User? newUser = newUserCredential.user;
+        if (newUser != null) {
+          String userID =
+              await generateUserID(); // Custom method for unique user ID
+          String formattedDate =
+              DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now());
+
+          // Store user details in Firestore
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(newUser.uid)
+              .set({
+            'email': email,
+            'profile': '',
+            'username': _usernameController.text.trim(),
+            'password': password,
+            'loginDateTime': formattedDate,
+            'userID': userID,
+            'uid': newUser.uid,
+          });
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Account created successfully!')),
+          );
+
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (context) => ArtGeneratorScreen()),
           );
-        } else {
-          // Password doesn't match, show error message
-          ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Incorrect password, please try again.')));
         }
       }
     } catch (e) {
-      // If the user does not exist (sign-in failed), create a new account
-      if (e.toString().contains('user-not-found')) {
-        try {
-          // Create new user if not found
-          UserCredential newUserCredential =
-              await _auth.createUserWithEmailAndPassword(
-            email: _emailController.text.trim(),
-            password: _passwordController.text.trim(),
-          );
-
-          User? newUser = newUserCredential.user;
-          if (newUser != null) {
-            // Generate a unique userID and current timestamp
-            String userID = await generateUserID();
-            String formattedDate =
-                DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now());
-
-            // Store the new user's details in Firestore (including the password for validation)
-            await FirebaseFirestore.instance
-                .collection('users')
-                .doc(newUser.uid)
-                .set({
-              'email': _emailController.text.trim(),
-              'profile': '', // Optional field
-              'username': _usernameController.text.trim(),
-              'password': _passwordController.text
-                  .trim(), // Store password for later validation
-              'loginDateTime': formattedDate,
-              'userID': userID,
-              'uid': newUser.uid,
-            });
-
-            ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Account created successfully!')));
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => ArtGeneratorScreen()),
-            );
-          }
-        } catch (e) {
-          // Handle registration error
-          ScaffoldMessenger.of(context)
-              .showSnackBar(SnackBar(content: Text('Registration failed: $e')));
-        }
-      } else {
-        // Handle other errors (e.g., incorrect email/password format)
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Login failed: $e')));
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
     }
   }
 

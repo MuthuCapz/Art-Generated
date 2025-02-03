@@ -5,7 +5,7 @@ import 'package:crypto/crypto.dart';
 
 class EncryptionHelper {
   static final String passphrase =
-      "ltVaek1ZaAsbJ8YehI5J"; //This passphrase is not the key itself but is used to generate a strong AES key.
+      "ltVaek1ZaAsbJ8YehI5"; //This passphrase is not the key itself but is used to generate a strong AES key.
 
   // Generate a 32-byte AES key using SHA-256
   static Key generateKey() {
