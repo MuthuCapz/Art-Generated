@@ -13,13 +13,15 @@ class SubscriptionPage extends StatefulWidget {
 }
 
 class _SubscriptionPageState extends State<SubscriptionPage> {
-  String selectedPlan = 'yearly'; // Default selected plan
+  String selectedPlan = 'yearly';
+  Map<String, dynamic>? subscriptionData; // Default selected plan
   Razorpay? _razorpay;
   String razorpayKey = ''; // Store decrypted Razorpay Key
 
   @override
   void initState() {
     super.initState();
+    fetchSubscriptionDetails();
     _razorpay = Razorpay();
     _razorpay?.on(Razorpay.EVENT_PAYMENT_SUCCESS, _handlePaymentSuccess);
     _razorpay?.on(Razorpay.EVENT_PAYMENT_ERROR, _handlePaymentError);
@@ -34,6 +36,35 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
   void dispose() {
     _razorpay?.clear();
     super.dispose();
+  }
+
+  Future<void> fetchSubscriptionDetails() async {
+    try {
+      // First, try to fetch from cache
+      DocumentSnapshot snapshot = await FirebaseFirestore.instance
+          .collection('subscriptionDetails')
+          .doc('subscriptionInfo')
+          .get(const GetOptions(source: Source.cache));
+
+      if (!snapshot.exists) {
+        // If cache miss, fetch from server
+        snapshot = await FirebaseFirestore.instance
+            .collection('subscriptionDetails')
+            .doc('subscriptionInfo')
+            .get(const GetOptions(source: Source.server));
+      }
+
+      if (snapshot.exists) {
+        setState(() {
+          subscriptionData = snapshot.data() as Map<String, dynamic>?;
+        });
+        print("Fetched Data: $subscriptionData"); // Debugging Line
+      } else {
+        print("Document does not exist!");
+      }
+    } catch (e) {
+      print("Error fetching subscription details: $e");
+    }
   }
 
   Future<void> fetchRazorpayKey() async {
@@ -198,40 +229,42 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                       child: SingleChildScrollView(
                         child: Column(
                           children: [
-                            _buildSubscriptionOption(
-                              title: "\$99.98 / year",
-                              subtitle:
-                                  "• 100 AI Image Generator calls\n• Billed and recurring yearly\n• Cancel anytime",
-                              isSelected: selectedPlan == 'yearly',
-                              onTap: () {
-                                setState(() {
-                                  selectedPlan = 'yearly';
-                                });
-                              },
-                              tag: "You save 20%",
-                            ),
-                            _buildSubscriptionOption(
-                              title: "\$29.98 / 3 months",
-                              subtitle:
-                                  "• 100 AI Image Generator calls\n• Billed and recurring every 3 months\n• Cancel anytime",
-                              isSelected: selectedPlan == 'quarterly',
-                              onTap: () {
-                                setState(() {
-                                  selectedPlan = 'quarterly';
-                                });
-                              },
-                            ),
-                            _buildSubscriptionOption(
-                              title: "\$9.98 / month",
-                              subtitle:
-                                  "• 100 AI Image Generator calls\n• Billed and recurring monthly\n• Cancel anytime",
-                              isSelected: selectedPlan == 'monthly',
-                              onTap: () {
-                                setState(() {
-                                  selectedPlan = 'monthly';
-                                });
-                              },
-                            ),
+                            if (subscriptionData != null)
+                              _buildSubscriptionOption(
+                                title: subscriptionData!['title'] ?? '',
+                                subtitle: subscriptionData!['subtitle'] ?? '',
+                                isSelected: selectedPlan == 'yearly',
+                                onTap: () {
+                                  setState(() {
+                                    selectedPlan = 'yearly';
+                                  });
+                                },
+                                tag: subscriptionData!['tag'],
+                              ),
+                            if (subscriptionData != null)
+                              _buildSubscriptionOption(
+                                title: subscriptionData!['title1'] ?? '',
+                                subtitle: subscriptionData!['subtitle1'] ?? '',
+                                isSelected: selectedPlan == 'quarterly',
+                                onTap: () {
+                                  setState(() {
+                                    selectedPlan = 'quarterly';
+                                  });
+                                },
+                                tag: subscriptionData!['tag1'],
+                              ),
+                            if (subscriptionData != null)
+                              _buildSubscriptionOption(
+                                title: subscriptionData!['title2'] ?? '',
+                                subtitle: subscriptionData!['subtitle2'] ?? '',
+                                isSelected: selectedPlan == 'monthly',
+                                onTap: () {
+                                  setState(() {
+                                    selectedPlan = 'monthly';
+                                  });
+                                },
+                                tag: subscriptionData!['tag2'],
+                              ),
                           ],
                         ),
                       ),
@@ -291,34 +324,57 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
     String formattedDateTime =
         DateFormat('MMMM d, y \'at\' h:mm:ss a').format(now);
 
-    // Determine selected plan details
-    if (selectedPlan == 'yearly') {
-      subscriptionData = {
-        "title": "\$99.98 / year",
-        "subtitle":
-            "• 100 AI Image Generator calls\n• Billed and recurring yearly\n• Cancel anytime",
-        "paymentResult": paymentResult, // Store payment result
-        "subscriptionDateTime": formattedDateTime,
-      };
-    } else if (selectedPlan == 'quarterly') {
-      subscriptionData = {
-        "title": "\$29.98 / 3 months",
-        "subtitle":
-            "• 100 AI Image Generator calls\n• Billed and recurring every 3 months\n• Cancel anytime",
-        "paymentResult": paymentResult, // Store payment result
-        "subscriptionDateTime": formattedDateTime,
-      };
-    } else if (selectedPlan == 'monthly') {
-      subscriptionData = {
-        "title": "\$9.98 / month",
-        "subtitle":
-            "• 100 AI Image Generator calls\n• Billed and recurring monthly\n• Cancel anytime",
-        "paymentResult": paymentResult, // Store payment result
-        "subscriptionDateTime": formattedDateTime,
-      };
-    }
-
+    // Fetch subscription details from Firestore based on selectedPlan
     try {
+      DocumentSnapshot subscriptionSnapshot = await FirebaseFirestore.instance
+          .collection('subscriptionDetails')
+          .doc('subscriptionInfo')
+          .get();
+
+      if (!subscriptionSnapshot.exists) {
+        print("Subscription details not found in Firestore.");
+        return;
+      }
+
+      // Debugging: print the entire snapshot to verify the fetched data
+      print("Fetched Subscription Data: ${subscriptionSnapshot.data()}");
+
+      // Retrieve the data based on selectedPlan
+      String title = '';
+      String subtitle = '';
+      String tag = '';
+
+      // Determine the selected plan and get data accordingly
+      if (selectedPlan == 'yearly') {
+        title = subscriptionSnapshot['title'];
+        subtitle = subscriptionSnapshot['subtitle'];
+        tag = subscriptionSnapshot['tag'];
+        print("Yearly plan selected");
+      } else if (selectedPlan == 'quarterly') {
+        title = subscriptionSnapshot['title1'];
+        subtitle = subscriptionSnapshot['subtitle1'];
+        tag = subscriptionSnapshot['tag1'];
+        print("Quarterly plan selected");
+      } else if (selectedPlan == 'monthly') {
+        title = subscriptionSnapshot['title2'];
+        subtitle = subscriptionSnapshot['subtitle2'];
+        tag = subscriptionSnapshot['tag2'];
+        print("Monthly plan selected");
+      } else {
+        print("Invalid plan selected: $selectedPlan");
+        return;
+      }
+
+      // Set the subscription data to save in Firestore
+      subscriptionData = {
+        "title": title,
+        "subtitle": subtitle,
+        "tag": tag,
+        "paymentResult": paymentResult, // Store payment result
+        "subscriptionDateTime": formattedDateTime,
+      };
+
+      // Save the subscription data to Firestore for the current user
       await FirebaseFirestore.instance
           .collection("subscription")
           .doc(uid)
@@ -338,6 +394,13 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
     required VoidCallback onTap,
     String? tag,
   }) {
+    String displaySubtitle = subtitle; // Create a copy
+
+    // Check for and replace escaped newlines (if needed)
+    if (subtitle.contains('\\n')) {
+      displaySubtitle = subtitle.replaceAll('\\n', '\n');
+    }
+
     return GestureDetector(
       onTap: onTap,
       child: Card(
@@ -383,8 +446,9 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                     ),
                     SizedBox(height: 8),
                     Text(
-                      subtitle,
+                      displaySubtitle, // Use the processed subtitle here
                       style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+                      softWrap: true,
                     ),
                   ],
                 ),
