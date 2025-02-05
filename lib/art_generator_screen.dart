@@ -1,4 +1,5 @@
 import 'package:art_generator/profile_page.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -9,6 +10,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 
+import 'SubscriptionPage.dart';
 import 'encryption_helper.dart';
 
 void main() => runApp(ArtGeneratorApp());
@@ -260,58 +262,7 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
     }
   }
 
-  Future<void> generateArt(String prompt, String aspectRatioName) async {
-    if (_apiKey == null) {
-      showToast("API key is not available.");
-      return;
-    }
-    String aspectRatio = aspectRatioValues[aspectRatioName]!;
-    setState(() {
-      _isLoading = true;
-      _generatedImageUrl = null;
-    });
-
-    const String apiUrl = 'https://api.deepai.org/api/text2img';
-
-    try {
-      final response = await http.post(
-        Uri.parse(apiUrl),
-        headers: {'Api-Key': _apiKey!},
-        body: {
-          'text': prompt,
-          'aspect_ratio': aspectRatio, // Pass the aspect ratio
-          'style': selectedStyle, // Pass the selected style (add this)
-        },
-      );
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        setState(() {
-          _generatedImageUrl = data['output_url'];
-          _isLoading = false;
-        });
-      } else {
-        setState(() {
-          _isLoading = false;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-                'Error: ${response.statusCode} - ${response.reasonPhrase}'),
-          ),
-        );
-      }
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
-    }
-  }
-
-  void _onGenerateButtonPressed() {
+  Future<void> _onGenerateButtonPressed() async {
     final prompt = _textController.text.trim();
     if (isValidPrompt(prompt)) {
       // Unfocus the text field
@@ -327,15 +278,166 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
           );
         }
       });
-
-      // Generate the art
-      final aspectRatio = selectedAspectRatio.isNotEmpty
-          ? selectedAspectRatio
-          : '1:1'; // Default to 1:1 if none selected
-      generateArt(prompt, aspectRatio);
+      // Check image count in Firestore
+      await _checkImageCountAndGenerate(prompt, selectedAspectRatio);
     } else {
-      showToast("Input should be 300 characters or less");
+      showToast("Input should be 500 characters or less");
     }
+  }
+
+  Future<void> _checkImageCountAndGenerate(
+      String prompt, String aspectRatioName) async {
+    try {
+      User? user = FirebaseAuth.instance.currentUser;
+
+      if (user == null) {
+        showToast("User not logged in.");
+        return;
+      }
+
+      DocumentReference userDocRef =
+          _firestore.collection('users').doc(user.uid);
+      DocumentSnapshot userDoc = await userDocRef.get();
+
+      int imageCount = userDoc.exists ? (userDoc.get('imagecount') ?? 0) : 0;
+
+      if (imageCount < 3) {
+        // Generate image and increment image count for the first 3 images
+        await generateArt(prompt, aspectRatioName);
+      } else {
+        // Check subscription status for the 4th image and beyond
+        DocumentSnapshot subscriptionDoc =
+            await _firestore.collection('subscription').doc(user.uid).get();
+
+        if (subscriptionDoc.exists) {
+          String paymentResult =
+              subscriptionDoc.get('paymentResult') ?? 'failed';
+
+          if (paymentResult == "success") {
+            // If subscription is successful, generate the image without showing the dialog
+            await generateArt(prompt, aspectRatioName);
+          } else {
+            // If subscription is not successful, show subscription prompt and do not generate image
+            showToast("Please subscribe to generate more images.");
+            _showSubscriptionPrompt();
+          }
+        } else {
+          // If subscription data is not found, show subscription prompt and do not generate image
+          showToast("Subscription data not found.");
+          _showSubscriptionPrompt();
+        }
+      }
+    } catch (e) {
+      showToast("Error accessing image count: $e");
+    }
+  }
+
+  Future<void> generateArt(String prompt, String aspectRatioName) async {
+    if (_apiKey == null) {
+      showToast("API key is not available.");
+      return;
+    }
+
+    String aspectRatio = aspectRatioValues[aspectRatioName]!;
+    setState(() {
+      _isLoading = true;
+      _generatedImageUrl = null;
+    });
+
+    const String apiUrl = 'https://api.deepai.org/api/text2img';
+
+    try {
+      final response = await http.post(
+        Uri.parse(apiUrl),
+        headers: {'Api-Key': _apiKey!},
+        body: {
+          'text': prompt,
+          'aspect_ratio': aspectRatio,
+          'style': selectedStyle,
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        setState(() {
+          _generatedImageUrl = data['output_url'];
+          _isLoading = false;
+        });
+
+        // Update image count after successful generation
+        await _updateImageCount();
+      } else {
+        setState(() {
+          _isLoading = false;
+        });
+        showToast('Error: ${response.statusCode} - ${response.reasonPhrase}');
+      }
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+      showToast('Error: $e');
+    }
+  }
+
+  Future<void> _updateImageCount() async {
+    try {
+      // Get the current user's UID
+      User? user = FirebaseAuth.instance.currentUser;
+
+      if (user == null) {
+        showToast("User not logged in.");
+        return;
+      }
+
+      DocumentReference userDoc = _firestore.collection('users').doc(user.uid);
+
+      // Get current image count
+      DocumentSnapshot snapshot = await userDoc.get();
+
+      int currentCount = 0;
+      if (snapshot.exists && snapshot.data() != null) {
+        currentCount =
+            (snapshot.data() as Map<String, dynamic>)['imagecount'] ?? 0;
+      }
+
+      // Increment image count
+      await userDoc.update({'imagecount': currentCount + 1});
+    } catch (e) {
+      showToast("Error updating image count: $e");
+    }
+  }
+
+  void _showSubscriptionPrompt() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text("Subscription Required"),
+          content: Text(
+              "You have reached the free limit. Please subscribe to generate more images."),
+          actions: [
+            TextButton(
+              child: Text("Subscribe"),
+              onPressed: () {
+                Navigator.of(context).pop();
+                // Navigate to the subscription page
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => SubscriptionPage()),
+                );
+              },
+            ),
+            TextButton(
+              child: Text("Cancel"),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override

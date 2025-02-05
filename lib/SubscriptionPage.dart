@@ -251,7 +251,6 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                                     selectedPlan = 'quarterly';
                                   });
                                 },
-                                tag: subscriptionData!['tag1'],
                               ),
                             if (subscriptionData != null)
                               _buildSubscriptionOption(
@@ -263,7 +262,6 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                                     selectedPlan = 'monthly';
                                   });
                                 },
-                                tag: subscriptionData!['tag2'],
                               ),
                           ],
                         ),
@@ -310,21 +308,19 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
 
   /// **Firestore Function to Save Subscription Plan**
   void saveSubscriptionPlan(String paymentResult) async {
-    User? user = FirebaseAuth.instance.currentUser; // Get Current User
+    User? user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       print("User not logged in");
       return;
     }
 
-    String uid = user.uid; // Get user ID
+    String uid = user.uid;
     Map<String, dynamic> subscriptionData = {};
 
-    // Get current DateTime and format it
     DateTime now = DateTime.now();
     String formattedDateTime =
         DateFormat('MMMM d, y \'at\' h:mm:ss a').format(now);
 
-    // Fetch subscription details from Firestore based on selectedPlan
     try {
       DocumentSnapshot subscriptionSnapshot = await FirebaseFirestore.instance
           .collection('subscriptionDetails')
@@ -336,45 +332,43 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
         return;
       }
 
-      // Debugging: print the entire snapshot to verify the fetched data
       print("Fetched Subscription Data: ${subscriptionSnapshot.data()}");
 
-      // Retrieve the data based on selectedPlan
       String title = '';
       String subtitle = '';
       String tag = '';
 
-      // Determine the selected plan and get data accordingly
-      if (selectedPlan == 'yearly') {
-        title = subscriptionSnapshot['title'];
-        subtitle = subscriptionSnapshot['subtitle'];
-        tag = subscriptionSnapshot['tag'];
-        print("Yearly plan selected");
-      } else if (selectedPlan == 'quarterly') {
-        title = subscriptionSnapshot['title1'];
-        subtitle = subscriptionSnapshot['subtitle1'];
-        tag = subscriptionSnapshot['tag1'];
-        print("Quarterly plan selected");
-      } else if (selectedPlan == 'monthly') {
-        title = subscriptionSnapshot['title2'];
-        subtitle = subscriptionSnapshot['subtitle2'];
-        tag = subscriptionSnapshot['tag2'];
-        print("Monthly plan selected");
+      String plan = selectedPlan.trim().toLowerCase();
+      print("Selected Plan: $plan");
+
+      if (plan == 'yearly') {
+        print("Accessing yearly fields...");
+        title = subscriptionSnapshot.get('title');
+        subtitle = subscriptionSnapshot.get('subtitle');
+        tag = subscriptionSnapshot.get('tag');
+      } else if (plan == 'quarterly') {
+        print("Accessing quarterly fields...");
+        title = subscriptionSnapshot.get('title1');
+        subtitle = subscriptionSnapshot.get('subtitle1');
+      } else if (plan == 'monthly') {
+        print("Accessing monthly fields...");
+        title = subscriptionSnapshot.get('title2');
+        subtitle = subscriptionSnapshot.get('subtitle2');
       } else {
         print("Invalid plan selected: $selectedPlan");
         return;
       }
 
-      // Set the subscription data to save in Firestore
+      print("Fetched Title: $title, Subtitle: $subtitle, Tag: $tag");
+
       subscriptionData = {
         "title": title,
         "subtitle": subtitle,
         "tag": tag,
-        "paymentResult": paymentResult, // Store payment result
+        "paymentResult": paymentResult,
         "subscriptionDateTime": formattedDateTime,
       };
 
-      // Save the subscription data to Firestore for the current user
       await FirebaseFirestore.instance
           .collection("subscription")
           .doc(uid)

@@ -156,10 +156,73 @@ class ProfilePage extends StatelessWidget {
                               style: TextStyle(
                                   fontSize: 14, color: Colors.black54),
                             ),
-                            Text(
-                              "3",
-                              style:
-                                  TextStyle(fontSize: 14, color: Colors.black),
+                            FutureBuilder<DocumentSnapshot>(
+                              future: _firestore
+                                  .collection('users')
+                                  .doc(user?.uid)
+                                  .get(),
+                              builder: (context, snapshot) {
+                                if (snapshot.connectionState ==
+                                    ConnectionState.waiting) {
+                                  return CircularProgressIndicator(); // Show loader while fetching data
+                                }
+
+                                if (!snapshot.hasData ||
+                                    !snapshot.data!.exists) {
+                                  return Text("3",
+                                      style: TextStyle(
+                                          fontSize: 14,
+                                          color: Colors
+                                              .black)); // Default if no data found
+                                }
+
+                                // Fetch the image count
+                                var userData = snapshot.data!;
+                                int imageCount = userData['imagecount'] ??
+                                    0; // Default to 0 if imagecount doesn't exist
+                                int planLimit = 3; // Set the plan limit
+
+                                int remainingPrompts = planLimit - imageCount;
+
+                                // Ensure no negative numbers
+                                if (remainingPrompts <= 0) {
+                                  return Row(
+                                    children: [
+                                      Text(
+                                        "$planLimit/$planLimit ",
+                                        style: TextStyle(
+                                            fontSize: 14, color: Colors.black),
+                                      ),
+                                      Icon(Icons.check_circle,
+                                          color: Colors.green, size: 18),
+                                      SizedBox(width: 5),
+                                      GestureDetector(
+                                        onTap: () {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                                builder: (context) =>
+                                                    SubscriptionPage()),
+                                          );
+                                        },
+                                        child: Text(
+                                          "Upgrade Now",
+                                          style: TextStyle(
+                                              color: Colors.blue,
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.bold),
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                } else {
+                                  return Text(
+                                    "$remainingPrompts image${remainingPrompts > 1 ? 's' : ''}",
+                                    style: TextStyle(
+                                        fontSize: 14, color: Colors.black),
+                                  );
+                                }
+                              },
                             ),
                           ],
                         ),
