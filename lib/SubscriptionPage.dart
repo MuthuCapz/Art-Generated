@@ -411,7 +411,6 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
 
       print("Subscription saved successfully!");
 
-      // **Schedule deletion after 30 days**
       Future.delayed(Duration(minutes: 1), () async {
         DocumentSnapshot userSubscription = await FirebaseFirestore.instance
             .collection("subscription")
@@ -422,13 +421,12 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
           await FirebaseFirestore.instance
               .collection("backupSubscription")
               .doc(uid)
-              .set(userSubscription.data()
-                  as Map<String, dynamic>); // Backup data
+              .set(userSubscription.data() as Map<String, dynamic>);
 
           await FirebaseFirestore.instance
               .collection("subscription")
               .doc(uid)
-              .delete(); // Delete from active collection
+              .delete();
           print(
               "Subscription moved to backup and deleted from active collection.");
         }
