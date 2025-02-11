@@ -178,11 +178,14 @@ class ProfilePage extends StatelessWidget {
 
                                 // Fetch the image count
                                 var userData = snapshot.data!;
-                                int imageCount = userData['imagecount'] ??
-                                    0; // Default to 0 if imagecount doesn't exist
+                                int imageCount = int.tryParse(
+                                        userData['imagecount'].toString()) ??
+                                    0;
+                                // Default to 0 if imagecount doesn't exist
                                 int planLimit = 3; // Set the plan limit
 
-                                int remainingPrompts = planLimit - imageCount;
+                                int remainingPrompts =
+                                    (planLimit - imageCount) as int;
 
                                 // Ensure no negative numbers
                                 if (remainingPrompts <= 0) {

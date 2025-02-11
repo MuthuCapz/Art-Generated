@@ -13,7 +13,7 @@ class SubscriptionPage extends StatefulWidget {
 }
 
 class _SubscriptionPageState extends State<SubscriptionPage> {
-  String selectedPlan = 'yearly';
+  String selectedPlan = 'prime';
   Map<String, dynamic>? subscriptionData; // Default selected plan
   Razorpay? _razorpay;
   String razorpayKey = ''; // Store decrypted Razorpay Key
@@ -38,32 +38,26 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
     super.dispose();
   }
 
-  Future<void> fetchSubscriptionDetails() async {
+  void fetchSubscriptionDetails() {
     try {
-      // First, try to fetch from cache
-      DocumentSnapshot snapshot = await FirebaseFirestore.instance
+      FirebaseFirestore.instance
           .collection('subscriptionDetails')
           .doc('subscriptionInfo')
-          .get(const GetOptions(source: Source.cache));
-
-      if (!snapshot.exists) {
-        // If cache miss, fetch from server
-        snapshot = await FirebaseFirestore.instance
-            .collection('subscriptionDetails')
-            .doc('subscriptionInfo')
-            .get(const GetOptions(source: Source.server));
-      }
-
-      if (snapshot.exists) {
-        setState(() {
-          subscriptionData = snapshot.data() as Map<String, dynamic>?;
-        });
-        print("Fetched Data: $subscriptionData"); // Debugging Line
-      } else {
-        print("Document does not exist!");
-      }
+          .snapshots()
+          .listen((snapshot) {
+        if (snapshot.exists) {
+          setState(() {
+            subscriptionData = snapshot.data() as Map<String, dynamic>?;
+          });
+          print("Updated Data: $subscriptionData"); // Debugging Line
+        } else {
+          print("Document does not exist!");
+        }
+      }, onError: (error) {
+        print("Error listening to subscription details: $error");
+      });
     } catch (e) {
-      print("Error fetching subscription details: $e");
+      print("Error setting up listener: $e");
     }
   }
 
@@ -90,22 +84,30 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
     }
   }
 
-  void startPayment() {
+  void startPayment() async {
+    // Make function async
     if (razorpayKey.isEmpty) {
       print("Razorpay key is empty, cannot proceed with payment.");
       return;
     }
 
-    print("Using Razorpay Key: $razorpayKey"); // Debugging purpose
-
-    var options = {
-      'key': razorpayKey, // Use the decrypted Razorpay key
-      'amount': getAmount(selectedPlan), // Convert amount to paisa
-      'name': 'Genify AI',
-      'description': 'Subscription Plan',
-    };
+    print("Using Razorpay Key: $razorpayKey");
 
     try {
+      dynamic amountResult = await getAmount(selectedPlan);
+      double amountInRupees =
+          (amountResult is int) ? amountResult.toDouble() : amountResult;
+
+      int amountInPaise = (amountInRupees * 100).toInt();
+
+      var options = {
+        'key': razorpayKey, // Use the decrypted Razorpay key
+        'amount': amountInPaise, // Razorpay requires amount in paise
+        'name': 'Genify AI',
+        'description': 'Subscription Plan',
+      };
+
+      print("Amount in Paise: $amountInPaise");
       _razorpay?.open(options);
     } catch (e) {
       print("Error starting payment: $e");
@@ -134,16 +136,45 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
     print("External Wallet Used: ${response.walletName}");
   }
 
-  int getAmount(String plan) {
-    switch (plan) {
-      case 'yearly':
-        return 9998 * 100; // Convert dollars to paisa
-      case 'quarterly':
-        return 2998 * 100;
-      case 'monthly':
-        return 998 * 100;
-      default:
-        return 0;
+  Future<int> getAmount(String plan) async {
+    try {
+      DocumentSnapshot snapshot = await FirebaseFirestore.instance
+          .collection('subscriptionDetails')
+          .doc('subscriptionInfo')
+          .get();
+
+      if (snapshot.exists) {
+        Map<String, dynamic>? data = snapshot.data() as Map<String, dynamic>?;
+
+        if (data != null) {
+          // Fetch the dollar conversion value dynamically
+          int dollarMultiplier =
+              int.parse(data['dollar'] ?? '100'); // Default to 100 if missing
+
+          switch (plan.toLowerCase()) {
+            case 'prime':
+              return (double.parse(data['title'].split('\$')[1].split('/')[0]) *
+                      dollarMultiplier)
+                  .toInt();
+            case 'pro':
+              return (double.parse(
+                          data['title1'].split('\$')[1].split('/')[0]) *
+                      dollarMultiplier)
+                  .toInt();
+            case 'standard':
+              return (double.parse(
+                          data['title2'].split('\$')[1].split('/')[0]) *
+                      dollarMultiplier)
+                  .toInt();
+            default:
+              return 0;
+          }
+        }
+      }
+      return 0;
+    } catch (e) {
+      print('Error fetching subscription amount: $e');
+      return 0;
     }
   }
 
@@ -233,10 +264,10 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                               _buildSubscriptionOption(
                                 title: subscriptionData!['title'] ?? '',
                                 subtitle: subscriptionData!['subtitle'] ?? '',
-                                isSelected: selectedPlan == 'yearly',
+                                isSelected: selectedPlan == 'prime',
                                 onTap: () {
                                   setState(() {
-                                    selectedPlan = 'yearly';
+                                    selectedPlan = 'prime';
                                   });
                                 },
                                 tag: subscriptionData!['tag'],
@@ -245,10 +276,10 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                               _buildSubscriptionOption(
                                 title: subscriptionData!['title1'] ?? '',
                                 subtitle: subscriptionData!['subtitle1'] ?? '',
-                                isSelected: selectedPlan == 'quarterly',
+                                isSelected: selectedPlan == 'pro',
                                 onTap: () {
                                   setState(() {
-                                    selectedPlan = 'quarterly';
+                                    selectedPlan = 'pro';
                                   });
                                 },
                               ),
@@ -256,10 +287,10 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                               _buildSubscriptionOption(
                                 title: subscriptionData!['title2'] ?? '',
                                 subtitle: subscriptionData!['subtitle2'] ?? '',
-                                isSelected: selectedPlan == 'monthly',
+                                isSelected: selectedPlan == 'standard',
                                 onTap: () {
                                   setState(() {
-                                    selectedPlan = 'monthly';
+                                    selectedPlan = 'standard';
                                   });
                                 },
                               ),
@@ -320,6 +351,9 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
     DateTime now = DateTime.now();
     String formattedDateTime =
         DateFormat('MMMM d, y \'at\' h:mm:ss a').format(now);
+    DateTime endDateTime = now.add(Duration(days: 30)); // Add 30 days
+    String formattedEndDateTime =
+        DateFormat('MMMM d, y \'at\' h:mm:ss a').format(endDateTime);
 
     try {
       DocumentSnapshot subscriptionSnapshot = await FirebaseFirestore.instance
@@ -341,16 +375,16 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
       String plan = selectedPlan.trim().toLowerCase();
       print("Selected Plan: $plan");
 
-      if (plan == 'yearly') {
+      if (plan == 'prime') {
         print("Accessing yearly fields...");
         title = subscriptionSnapshot.get('title');
         subtitle = subscriptionSnapshot.get('subtitle');
         tag = subscriptionSnapshot.get('tag');
-      } else if (plan == 'quarterly') {
+      } else if (plan == 'pro') {
         print("Accessing quarterly fields...");
         title = subscriptionSnapshot.get('title1');
         subtitle = subscriptionSnapshot.get('subtitle1');
-      } else if (plan == 'monthly') {
+      } else if (plan == 'standard') {
         print("Accessing monthly fields...");
         title = subscriptionSnapshot.get('title2');
         subtitle = subscriptionSnapshot.get('subtitle2');
@@ -367,6 +401,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
         "tag": tag,
         "paymentResult": paymentResult,
         "subscriptionDateTime": formattedDateTime,
+        "subscriptionEndDateTime": formattedEndDateTime,
       };
 
       await FirebaseFirestore.instance
@@ -375,6 +410,29 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
           .set(subscriptionData);
 
       print("Subscription saved successfully!");
+
+      // **Schedule deletion after 30 days**
+      Future.delayed(Duration(minutes: 1), () async {
+        DocumentSnapshot userSubscription = await FirebaseFirestore.instance
+            .collection("subscription")
+            .doc(uid)
+            .get();
+
+        if (userSubscription.exists) {
+          await FirebaseFirestore.instance
+              .collection("backupSubscription")
+              .doc(uid)
+              .set(userSubscription.data()
+                  as Map<String, dynamic>); // Backup data
+
+          await FirebaseFirestore.instance
+              .collection("subscription")
+              .doc(uid)
+              .delete(); // Delete from active collection
+          print(
+              "Subscription moved to backup and deleted from active collection.");
+        }
+      });
     } catch (e) {
       print("Error saving subscription: $e");
     }

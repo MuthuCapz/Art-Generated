@@ -279,13 +279,13 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
         }
       });
       // Check image count in Firestore
-      await _checkImageCountAndGenerate(prompt, selectedAspectRatio);
+      await _checkCreditsAndGenerate(prompt, selectedAspectRatio);
     } else {
       showToast("Input should be 500 characters or less");
     }
   }
 
-  Future<void> _checkImageCountAndGenerate(
+  Future<void> _checkCreditsAndGenerate(
       String prompt, String aspectRatioName) async {
     try {
       User? user = FirebaseAuth.instance.currentUser;
@@ -299,11 +299,23 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
           _firestore.collection('users').doc(user.uid);
       DocumentSnapshot userDoc = await userDocRef.get();
 
-      int imageCount = userDoc.exists ? (userDoc.get('imagecount') ?? 0) : 0;
+      int credits = userDoc.exists
+          ? (userDoc.get('credits') ?? 15)
+          : 15; // New users start with 15 credits
+      int imagesGenerated =
+          userDoc.exists ? (userDoc.get('imagesGenerated') ?? 0) : 0;
 
-      if (imageCount < 3) {
-        // Generate image and increment image count for the first 3 images
-        await generateArt(prompt, aspectRatioName);
+      if (imagesGenerated < 3) {
+        // First 3 images are free (using the 15 credits given initially)
+        if (credits >= 5) {
+          await userDocRef.update({
+            'credits': credits - 5,
+            'imagesGenerated': imagesGenerated + 1,
+          });
+          await generateArt(prompt, aspectRatioName);
+        } else {
+          showToast("Not enough credits to generate an image.");
+        }
       } else {
         // Check subscription status for the 4th image and beyond
         DocumentSnapshot subscriptionDoc =
@@ -314,21 +326,21 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
               subscriptionDoc.get('paymentResult') ?? 'failed';
 
           if (paymentResult == "success") {
-            // If subscription is successful, generate the image without showing the dialog
+            // If subscription is active, generate the image without deducting credits
             await generateArt(prompt, aspectRatioName);
           } else {
-            // If subscription is not successful, show subscription prompt and do not generate image
+            // If subscription is not active, show subscription prompt
             showToast("Please subscribe to generate more images.");
             _showSubscriptionPrompt();
           }
         } else {
-          // If subscription data is not found, show subscription prompt and do not generate image
+          // If no subscription data is found, show subscription prompt
           showToast("Subscription data not found.");
           _showSubscriptionPrompt();
         }
       }
     } catch (e) {
-      showToast("Error accessing image count: $e");
+      showToast("Error checking credits: $e");
     }
   }
 
@@ -365,7 +377,7 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
         });
 
         // Update image count after successful generation
-        await _updateImageCount();
+        await _updateCredits();
       } else {
         setState(() {
           _isLoading = false;
@@ -380,7 +392,7 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
     }
   }
 
-  Future<void> _updateImageCount() async {
+  Future<void> _updateCredits() async {
     try {
       // Get the current user's UID
       User? user = FirebaseAuth.instance.currentUser;
@@ -392,19 +404,19 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
 
       DocumentReference userDoc = _firestore.collection('users').doc(user.uid);
 
-      // Get current image count
+      // Get current credits
       DocumentSnapshot snapshot = await userDoc.get();
 
-      int currentCount = 0;
+      int currentCredits = 0;
       if (snapshot.exists && snapshot.data() != null) {
-        currentCount =
-            (snapshot.data() as Map<String, dynamic>)['imagecount'] ?? 0;
+        currentCredits =
+            (snapshot.data() as Map<String, dynamic>)['credits'] ?? 0;
       }
 
-      // Increment image count
-      await userDoc.update({'imagecount': currentCount + 1});
+      // Increment credits by 5
+      await userDoc.update({'credits': currentCredits + 5});
     } catch (e) {
-      showToast("Error updating image count: $e");
+      showToast("Error updating credits: $e");
     }
   }
 
