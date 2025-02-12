@@ -40,7 +40,11 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
   final TextEditingController _textController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final FocusNode _focusNode = FocusNode();
-
+  int defaultCredits = 0;
+  int imageCount = 0;
+  int extraCredits = 0; // Extracted from Firestore
+  String uid = FirebaseAuth.instance.currentUser?.uid ?? "";
+  bool isSubscribed = false;
   String selectedAspectRatio = 'square';
   String? _generatedImageUrl;
   bool _isLoading = false;
@@ -52,7 +56,74 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
   @override
   void initState() {
     super.initState();
+    fetchInitialData();
+    listenToImageCountChanges();
     _fetchApiKey(); // Fetch API key when the widget is initialized
+  }
+
+  /// Fetch default credits and subscription info
+  Future<void> fetchInitialData() async {
+    if (uid.isNotEmpty) {
+      try {
+        DocumentSnapshot subscriptionSnapshot = await FirebaseFirestore.instance
+            .collection('subscriptionDetails')
+            .doc('subscriptionInfo')
+            .get();
+
+        int fetchedCredits = int.tryParse(
+                subscriptionSnapshot.get('defaultCredits').toString()) ??
+            0;
+
+        DocumentSnapshot userSubscriptionSnapshot = await FirebaseFirestore
+            .instance
+            .collection('subscription')
+            .doc(uid)
+            .get();
+
+        String paymentResult =
+            userSubscriptionSnapshot.get('paymentResult') ?? '';
+        String subtitle = userSubscriptionSnapshot.get('subtitle') ?? '';
+
+        int extractedCredits = extractFirstNumber(subtitle);
+
+        print("Extracted Credits: $extractedCredits"); // Debugging
+
+        setState(() {
+          defaultCredits = fetchedCredits;
+          isSubscribed = paymentResult == "success";
+          extraCredits = extractedCredits;
+        });
+      } catch (e) {
+        print("Error fetching subscription data: $e");
+      }
+    }
+  }
+
+  /// Extract first number from subtitle text
+  int extractFirstNumber(String text) {
+    RegExp regExp = RegExp(r'\d+');
+    Match? match = regExp.firstMatch(text);
+    return match != null ? int.parse(match.group(0)!) : 0;
+  }
+
+  /// Listen for real-time imageCount updates
+  void listenToImageCountChanges() {
+    if (uid.isNotEmpty) {
+      FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .snapshots()
+          .listen((snapshot) {
+        if (snapshot.exists) {
+          int newImageCount =
+              int.tryParse(snapshot.get('imagecount').toString()) ?? 0;
+
+          setState(() {
+            imageCount = newImageCount;
+          });
+        }
+      });
+    }
   }
 
   // Fetch the encrypted API key from Firestore and decrypt it
@@ -279,13 +350,13 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
         }
       });
       // Check image count in Firestore
-      await _checkCreditsAndGenerate(prompt, selectedAspectRatio);
+      await _checkImageCountAndGenerate(prompt, selectedAspectRatio);
     } else {
       showToast("Input should be 500 characters or less");
     }
   }
 
-  Future<void> _checkCreditsAndGenerate(
+  Future<void> _checkImageCountAndGenerate(
       String prompt, String aspectRatioName) async {
     try {
       User? user = FirebaseAuth.instance.currentUser;
@@ -299,23 +370,13 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
           _firestore.collection('users').doc(user.uid);
       DocumentSnapshot userDoc = await userDocRef.get();
 
-      int credits = userDoc.exists
-          ? (userDoc.get('credits') ?? 15)
-          : 15; // New users start with 15 credits
-      int imagesGenerated =
-          userDoc.exists ? (userDoc.get('imagesGenerated') ?? 0) : 0;
+      int imageCount = userDoc.exists
+          ? int.tryParse(userDoc.get('imagecount').toString()) ?? 0
+          : 0;
 
-      if (imagesGenerated < 3) {
-        // First 3 images are free (using the 15 credits given initially)
-        if (credits >= 5) {
-          await userDocRef.update({
-            'credits': credits - 5,
-            'imagesGenerated': imagesGenerated + 1,
-          });
-          await generateArt(prompt, aspectRatioName);
-        } else {
-          showToast("Not enough credits to generate an image.");
-        }
+      if (imageCount < 3) {
+        // Generate image and increment image count for the first 3 images
+        await generateArt(prompt, aspectRatioName);
       } else {
         // Check subscription status for the 4th image and beyond
         DocumentSnapshot subscriptionDoc =
@@ -326,21 +387,21 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
               subscriptionDoc.get('paymentResult') ?? 'failed';
 
           if (paymentResult == "success") {
-            // If subscription is active, generate the image without deducting credits
+            // If subscription is successful, generate the image without showing the dialog
             await generateArt(prompt, aspectRatioName);
           } else {
-            // If subscription is not active, show subscription prompt
+            // If subscription is not successful, show subscription prompt and do not generate image
             showToast("Please subscribe to generate more images.");
             _showSubscriptionPrompt();
           }
         } else {
-          // If no subscription data is found, show subscription prompt
+          // If subscription data is not found, show subscription prompt and do not generate image
           showToast("Subscription data not found.");
           _showSubscriptionPrompt();
         }
       }
     } catch (e) {
-      showToast("Error checking credits: $e");
+      showToast("Error accessing image count: $e");
     }
   }
 
@@ -377,7 +438,7 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
         });
 
         // Update image count after successful generation
-        await _updateCredits();
+        await _updateImageCount();
       } else {
         setState(() {
           _isLoading = false;
@@ -392,7 +453,7 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
     }
   }
 
-  Future<void> _updateCredits() async {
+  Future<void> _updateImageCount() async {
     try {
       // Get the current user's UID
       User? user = FirebaseAuth.instance.currentUser;
@@ -404,19 +465,19 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
 
       DocumentReference userDoc = _firestore.collection('users').doc(user.uid);
 
-      // Get current credits
+      // Get current image count
       DocumentSnapshot snapshot = await userDoc.get();
 
-      int currentCredits = 0;
+      int currentCount = 0;
       if (snapshot.exists && snapshot.data() != null) {
-        currentCredits =
-            (snapshot.data() as Map<String, dynamic>)['credits'] ?? 0;
+        currentCount =
+            (snapshot.data() as Map<String, dynamic>)['imagecount'] ?? 0;
       }
 
-      // Increment credits by 5
-      await userDoc.update({'credits': currentCredits + 5});
+      // Increment image count
+      await userDoc.update({'imagecount': currentCount + 1});
     } catch (e) {
-      showToast("Error updating credits: $e");
+      showToast("Error updating image count: $e");
     }
   }
 
@@ -462,6 +523,16 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
 
   @override
   Widget build(BuildContext context) {
+    int creditsUsed = imageCount * 5;
+    int remainingCredits = defaultCredits - creditsUsed;
+
+    if (remainingCredits < 0) remainingCredits = 0;
+
+    if (remainingCredits == 0 && isSubscribed && extraCredits > 0) {
+      print("Applying Extra Credits: $extraCredits"); // Debugging
+      remainingCredits = extraCredits;
+    }
+
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
@@ -472,15 +543,28 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
               'AI Image Generator', // Left side text
               style: TextStyle(color: Colors.white),
             ),
-            IconButton(
-              icon: Icon(Icons.menu, color: Colors.white), // Sidebar icon
-              onPressed: () {
-                // Navigate to ProfilePage when the icon is clicked
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => ProfilePage()),
-                );
-              },
+            Row(
+              children: [
+                Text('💰', style: TextStyle(fontSize: 20)),
+                // Coin symbol
+                SizedBox(width: 3), // Space between icon and count
+                Text(
+                  '$remainingCredits', // Replace this with a dynamic count variable
+                  style: TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.normal),
+                ),
+                SizedBox(width: 15), // Space before menu icon
+                IconButton(
+                  icon: Icon(Icons.menu, color: Colors.white), // Sidebar icon
+                  onPressed: () {
+                    // Navigate to ProfilePage when the icon is clicked
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => ProfilePage()),
+                    );
+                  },
+                ),
+              ],
             ),
           ],
         ),

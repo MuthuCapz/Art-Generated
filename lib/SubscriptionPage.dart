@@ -147,25 +147,16 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
         Map<String, dynamic>? data = snapshot.data() as Map<String, dynamic>?;
 
         if (data != null) {
-          // Fetch the dollar conversion value dynamically
-          int dollarMultiplier =
-              int.parse(data['dollar'] ?? '100'); // Default to 100 if missing
-
           switch (plan.toLowerCase()) {
             case 'prime':
-              return (double.parse(data['title'].split('\$')[1].split('/')[0]) *
-                      dollarMultiplier)
-                  .toInt();
+              return int.parse(
+                  data['title'].split('₹')[1].split('/')[0].trim());
             case 'pro':
-              return (double.parse(
-                          data['title1'].split('\$')[1].split('/')[0]) *
-                      dollarMultiplier)
-                  .toInt();
+              return int.parse(
+                  data['title1'].split('₹')[1].split('/')[0].trim());
             case 'standard':
-              return (double.parse(
-                          data['title2'].split('\$')[1].split('/')[0]) *
-                      dollarMultiplier)
-                  .toInt();
+              return int.parse(
+                  data['title2'].split('₹')[1].split('/')[0].trim());
             default:
               return 0;
           }
@@ -411,7 +402,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
 
       print("Subscription saved successfully!");
 
-      Future.delayed(Duration(minutes: 1), () async {
+      Future.delayed(Duration(days: 30), () async {
         DocumentSnapshot userSubscription = await FirebaseFirestore.instance
             .collection("subscription")
             .doc(uid)
