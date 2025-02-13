@@ -121,13 +121,42 @@ class ProfilePage extends StatelessWidget {
                                 fontSize: 16,
                               ),
                             ),
-                            Text(
-                              "FREE",
-                              style: TextStyle(
-                                color: Colors.deepPurple,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
+                            FutureBuilder<DocumentSnapshot>(
+                              future: _firestore
+                                  .collection('subscription')
+                                  .doc(user?.uid)
+                                  .get(),
+                              builder: (context, snapshot) {
+                                if (snapshot.connectionState ==
+                                    ConnectionState.waiting) {
+                                  return CircularProgressIndicator(); // Show loader while fetching data
+                                }
+
+                                if (!snapshot.hasData ||
+                                    !snapshot.data!.exists) {
+                                  return Text(
+                                    "FREE",
+                                    style: TextStyle(
+                                      color: Colors.deepPurple,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                    ),
+                                  );
+                                }
+
+                                var subscriptionData = snapshot.data!;
+                                String paymentResult =
+                                    subscriptionData['paymentResult'] ?? "FREE";
+
+                                return Text(
+                                  paymentResult == "success" ? "PAID" : "FREE",
+                                  style: TextStyle(
+                                    color: Colors.deepPurple,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                );
+                              },
                             ),
                           ],
                         ),
@@ -140,10 +169,48 @@ class ProfilePage extends StatelessWidget {
                               style: TextStyle(
                                   fontSize: 14, color: Colors.black54),
                             ),
-                            Text(
-                              "3 images",
-                              style:
-                                  TextStyle(fontSize: 14, color: Colors.black),
+                            StreamBuilder<DocumentSnapshot>(
+                              stream: _firestore
+                                  .collection('subscription')
+                                  .doc(user?.uid)
+                                  .snapshots(),
+                              builder: (context, snapshot) {
+                                if (snapshot.connectionState ==
+                                    ConnectionState.waiting) {
+                                  return CircularProgressIndicator(); // Show loader while fetching data
+                                }
+
+                                if (!snapshot.hasData ||
+                                    !snapshot.data!.exists) {
+                                  return Text(
+                                    "3 images",
+                                    style: TextStyle(
+                                        fontSize: 14, color: Colors.black),
+                                  );
+                                }
+
+                                var subscriptionData = snapshot.data!;
+                                String paymentResult =
+                                    subscriptionData['paymentResult'] ?? "FREE";
+                                String subtitle =
+                                    subscriptionData['subtitle'] ??
+                                        "3 images"; // Default if missing
+
+                                // Extract the number before "image" using regex
+                                RegExp regExp = RegExp(r'(\d+)\s*image');
+                                Match? match = regExp.firstMatch(subtitle);
+                                String extractedText = match != null
+                                    ? "${match.group(1)} images"
+                                    : "3 images";
+
+                                return Text(
+                                  paymentResult == "success"
+                                      ? extractedText
+                                      : "3 images",
+                                  style: TextStyle(
+                                      fontSize: 14, color: Colors.black),
+                                );
+                              },
                             ),
                           ],
                         ),
@@ -156,75 +223,70 @@ class ProfilePage extends StatelessWidget {
                               style: TextStyle(
                                   fontSize: 14, color: Colors.black54),
                             ),
-                            FutureBuilder<DocumentSnapshot>(
-                              future: _firestore
-                                  .collection('users')
+                            StreamBuilder<DocumentSnapshot>(
+                              stream: _firestore
+                                  .collection('subscription')
                                   .doc(user?.uid)
-                                  .get(),
-                              builder: (context, snapshot) {
-                                if (snapshot.connectionState ==
+                                  .snapshots(),
+                              builder: (context, subscriptionSnapshot) {
+                                if (subscriptionSnapshot.connectionState ==
                                     ConnectionState.waiting) {
-                                  return CircularProgressIndicator(); // Show loader while fetching data
+                                  return CircularProgressIndicator();
                                 }
 
-                                if (!snapshot.hasData ||
-                                    !snapshot.data!.exists) {
-                                  return Text("3",
-                                      style: TextStyle(
-                                          fontSize: 14,
-                                          color: Colors
-                                              .black)); // Default if no data found
+                                // Default first time (if no subscription data)
+                                if (!subscriptionSnapshot.hasData ||
+                                    !subscriptionSnapshot.data!.exists) {
+                                  return _showUpgradeNow(context);
                                 }
 
-                                // Fetch the image count
-                                var userData = snapshot.data!;
-                                int imageCount = int.tryParse(
-                                        userData['imagecount'].toString()) ??
-                                    0;
-                                // Default to 0 if imagecount doesn't exist
-                                int planLimit = 3; // Set the plan limit
+                                var subscriptionData =
+                                    subscriptionSnapshot.data!;
+                                String paymentResult =
+                                    subscriptionData['paymentResult'] ?? "";
 
-                                int remainingPrompts =
-                                    (planLimit - imageCount) as int;
+                                // If payment is NOT "success", show default "3/3 Upgrade Now"
+                                if (paymentResult != "success") {
+                                  return _showUpgradeNow(context);
+                                }
 
-                                // Ensure no negative numbers
-                                if (remainingPrompts <= 0) {
-                                  return Row(
-                                    children: [
-                                      Text(
-                                        "$planLimit/$planLimit ",
+                                return StreamBuilder<DocumentSnapshot>(
+                                  stream: _firestore
+                                      .collection('users')
+                                      .doc(user?.uid)
+                                      .snapshots(),
+                                  builder: (context, userSnapshot) {
+                                    if (userSnapshot.connectionState ==
+                                        ConnectionState.waiting) {
+                                      return CircularProgressIndicator();
+                                    }
+
+                                    if (!userSnapshot.hasData ||
+                                        !userSnapshot.data!.exists) {
+                                      return _showUpgradeNow(context);
+                                    }
+
+                                    var userData = userSnapshot.data!;
+                                    int imageCount = int.tryParse(
+                                            userData['imagecount']
+                                                .toString()) ??
+                                        3; // Default to 3
+
+                                    int remainingPrompts =
+                                        3 - imageCount; // Correct calculation
+
+                                    // ✅ Fix: Only show "3/3 Upgrade Now" when `imageCount == 3`
+                                    if (imageCount == 3) {
+                                      return _showUpgradeNow(context);
+                                    } else {
+                                      return Text(
+                                        "$remainingPrompts image${remainingPrompts > 1 ? 's' : ''}",
                                         style: TextStyle(
                                             fontSize: 14, color: Colors.black),
-                                      ),
-                                      Icon(Icons.check_circle,
-                                          color: Colors.green, size: 18),
-                                      SizedBox(width: 5),
-                                      GestureDetector(
-                                        onTap: () {
-                                          Navigator.push(
-                                            context,
-                                            MaterialPageRoute(
-                                                builder: (context) =>
-                                                    SubscriptionPage()),
-                                          );
-                                        },
-                                        child: Text(
-                                          "Upgrade Now",
-                                          style: TextStyle(
-                                              color: Colors.blue,
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.bold),
-                                        ),
-                                      ),
-                                    ],
-                                  );
-                                } else {
-                                  return Text(
-                                    "$remainingPrompts image${remainingPrompts > 1 ? 's' : ''}",
-                                    style: TextStyle(
-                                        fontSize: 14, color: Colors.black),
-                                  );
-                                }
+                                      );
+                                    }
+                                  },
+                                );
                               },
                             ),
                           ],
@@ -359,4 +421,28 @@ class ProfilePage extends StatelessWidget {
       ),
     );
   }
+}
+
+/// ✅ Fix: Now `_showUpgradeNow()` receives `context`
+Widget _showUpgradeNow(BuildContext context) {
+  return Row(
+    children: [
+      Text("3/3", style: TextStyle(fontSize: 14, color: Colors.black)),
+      Icon(Icons.check_circle, color: Colors.green, size: 18),
+      SizedBox(width: 5),
+      GestureDetector(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => SubscriptionPage()),
+          );
+        },
+        child: Text(
+          "Upgrade Now",
+          style: TextStyle(
+              color: Colors.blue, fontSize: 14, fontWeight: FontWeight.bold),
+        ),
+      ),
+    ],
+  );
 }

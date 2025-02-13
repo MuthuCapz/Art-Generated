@@ -42,27 +42,26 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
   final FocusNode _focusNode = FocusNode();
   int defaultCredits = 0;
   int imageCount = 0;
-  int extraCredits = 0; // Extracted from Firestore
+  int extraCredits = 0;
+  int remainingCredits = 0;
   String uid = FirebaseAuth.instance.currentUser?.uid ?? "";
   bool isSubscribed = false;
+  bool isImageCountAvailable = false;
   String selectedAspectRatio = 'square';
   String? _generatedImageUrl;
   bool _isLoading = false;
   String? _apiKey;
 
-  // Firestore reference
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   @override
   void initState() {
     super.initState();
-    fetchInitialData();
-    listenToImageCountChanges();
-    _fetchApiKey(); // Fetch API key when the widget is initialized
+    fetchInitialCredits();
+    _fetchApiKey();
   }
 
-  /// Fetch default credits and subscription info
-  Future<void> fetchInitialData() async {
+  Future<void> fetchInitialCredits() async {
     if (uid.isNotEmpty) {
       try {
         DocumentSnapshot subscriptionSnapshot = await FirebaseFirestore.instance
@@ -74,39 +73,20 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
                 subscriptionSnapshot.get('defaultCredits').toString()) ??
             0;
 
-        DocumentSnapshot userSubscriptionSnapshot = await FirebaseFirestore
-            .instance
-            .collection('subscription')
-            .doc(uid)
-            .get();
-
-        String paymentResult =
-            userSubscriptionSnapshot.get('paymentResult') ?? '';
-        String subtitle = userSubscriptionSnapshot.get('subtitle') ?? '';
-
-        int extractedCredits = extractFirstNumber(subtitle);
-
-        print("Extracted Credits: $extractedCredits"); // Debugging
-
         setState(() {
           defaultCredits = fetchedCredits;
-          isSubscribed = paymentResult == "success";
-          extraCredits = extractedCredits;
+          remainingCredits = fetchedCredits;
         });
+
+        // Start real-time listeners AFTER fetching defaultCredits
+        listenToImageCountChanges();
+        listenToSubscriptionChanges();
       } catch (e) {
-        print("Error fetching subscription data: $e");
+        print("Error fetching default credits: $e");
       }
     }
   }
 
-  /// Extract first number from subtitle text
-  int extractFirstNumber(String text) {
-    RegExp regExp = RegExp(r'\d+');
-    Match? match = regExp.firstMatch(text);
-    return match != null ? int.parse(match.group(0)!) : 0;
-  }
-
-  /// Listen for real-time imageCount updates
   void listenToImageCountChanges() {
     if (uid.isNotEmpty) {
       FirebaseFirestore.instance
@@ -120,13 +100,78 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
 
           setState(() {
             imageCount = newImageCount;
+            isImageCountAvailable = true;
+            updateRemainingCredits();
+          });
+        } else {
+          setState(() {
+            isImageCountAvailable = false;
+            remainingCredits = defaultCredits;
           });
         }
       });
     }
   }
 
-  // Fetch the encrypted API key from Firestore and decrypt it
+  void listenToSubscriptionChanges() {
+    if (uid.isNotEmpty) {
+      FirebaseFirestore.instance
+          .collection('subscription')
+          .doc(uid)
+          .snapshots()
+          .listen((snapshot) {
+        if (snapshot.exists) {
+          String paymentResult = snapshot.get('paymentResult') ?? '';
+          String subtitle = snapshot.get('subtitle') ?? '';
+
+          int extractedCredits = extractFirstNumber(subtitle);
+
+          setState(() {
+            isSubscribed = paymentResult == "success";
+            extraCredits = extractedCredits;
+            updateRemainingCredits(); // ✅ Update remaining credits dynamically
+          });
+        }
+      });
+    }
+  }
+
+  int extractFirstNumber(String text) {
+    RegExp regExp = RegExp(r'\d+');
+    Match? match = regExp.firstMatch(text);
+    return match != null ? int.parse(match.group(0)!) : 0;
+  }
+
+  void updateRemainingCredits() {
+    if (!isImageCountAvailable) {
+      remainingCredits = defaultCredits;
+      return;
+    }
+    int creditsUsed = imageCount * 5;
+    int newRemainingCredits = defaultCredits - creditsUsed;
+
+    if (newRemainingCredits < 0) newRemainingCredits = 0;
+
+    // Apply extraCredits when needed
+    if (newRemainingCredits == 0 && isSubscribed && extraCredits > 0) {
+      print("Applying Extra Credits: $extraCredits");
+      // Calculate adjusted image count with base 3
+      int base = 3;
+      int adjustedImageCount = imageCount - base;
+      if (adjustedImageCount < 0) adjustedImageCount = 0;
+      int creditsUsedFromExtra = adjustedImageCount * 5;
+      newRemainingCredits = extraCredits - creditsUsedFromExtra;
+      if (newRemainingCredits < 0) {
+        newRemainingCredits = 0;
+      }
+    }
+
+    setState(() {
+      remainingCredits = newRemainingCredits;
+    });
+    print("Applying Extra Credits: $remainingCredits");
+  }
+
   Future<void> _fetchApiKey() async {
     try {
       DocumentSnapshot doc = await _firestore
@@ -135,12 +180,12 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
           .get();
 
       if (doc.exists) {
-        String encryptedKey = doc['key']; // Fetch encrypted key from Firestore
+        String encryptedKey = doc['key'];
         String decryptedKey =
             EncryptionHelper.decryptData(encryptedKey); // Decrypt it
 
         setState(() {
-          _apiKey = decryptedKey; // Store decrypted key
+          _apiKey = decryptedKey;
         });
       } else {
         showToast("API key not found in Firestore.");
@@ -150,10 +195,9 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
     }
   }
 
-  // Default to square
   Map<String, String> aspectRatioValues = {
     'square': '1:1',
-    'portrait': '9:16', // Or '3:4' depending on your preference
+    'portrait': '9:16',
     'landscape': '16:9',
   };
 
@@ -161,7 +205,7 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
     return prompt.trim().length <= 500;
   }
 
-  String selectedStyle = 'Cute Creature Generator'; // Default style
+  String selectedStyle = 'Cute Creature Generator';
 
   List<String> styles = [
     'Cute Creature Generator',
@@ -203,13 +247,12 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
         child: Column(
           children: [
             ClipRRect(
-              borderRadius:
-                  BorderRadius.circular(10), // Adjust the radius as needed
+              borderRadius: BorderRadius.circular(10),
               child: Image.asset(
                 styleImages[styleName]!,
-                width: 120, // Adjust the width to fit your design
-                height: 104, // Adjust the height as needed
-                fit: BoxFit.cover, // Ensures the image fits well
+                width: 120,
+                height: 104,
+                fit: BoxFit.cover,
               ),
             ),
             SizedBox(height: 4),
@@ -234,8 +277,6 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
       fontSize: 16.0,
     );
   }
-
-  // Add this function to handle aspect ratio selection
 
   Widget buildAspectRatioButton(String ratioName, String ratioValue) {
     bool isSelected = selectedAspectRatio == ratioName;
@@ -339,7 +380,6 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
       // Unfocus the text field
       _focusNode.unfocus();
 
-      // Scroll to the top after the widget is fully built
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_scrollController.hasClients) {
           _scrollController.animateTo(
@@ -349,7 +389,7 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
           );
         }
       });
-      // Check image count in Firestore
+
       await _checkImageCountAndGenerate(prompt, selectedAspectRatio);
     } else {
       showToast("Input should be 500 characters or less");
@@ -523,16 +563,6 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
 
   @override
   Widget build(BuildContext context) {
-    int creditsUsed = imageCount * 5;
-    int remainingCredits = defaultCredits - creditsUsed;
-
-    if (remainingCredits < 0) remainingCredits = 0;
-
-    if (remainingCredits == 0 && isSubscribed && extraCredits > 0) {
-      print("Applying Extra Credits: $extraCredits"); // Debugging
-      remainingCredits = extraCredits;
-    }
-
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
@@ -547,17 +577,25 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
               children: [
                 Text('💰', style: TextStyle(fontSize: 20)),
                 // Coin symbol
-                SizedBox(width: 3), // Space between icon and count
-                Text(
-                  '$remainingCredits', // Replace this with a dynamic count variable
-                  style: TextStyle(
-                      color: Colors.white, fontWeight: FontWeight.normal),
+                SizedBox(width: 3),
+                GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => ProfilePage()),
+                    );
+                  },
+                  child: Text(
+                    '$remainingCredits',
+                    style: TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.normal),
+                  ),
                 ),
-                SizedBox(width: 15), // Space before menu icon
+
+                SizedBox(width: 15),
                 IconButton(
                   icon: Icon(Icons.menu, color: Colors.white), // Sidebar icon
                   onPressed: () {
-                    // Navigate to ProfilePage when the icon is clicked
                     Navigator.push(
                       context,
                       MaterialPageRoute(builder: (context) => ProfilePage()),
