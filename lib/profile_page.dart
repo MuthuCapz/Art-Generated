@@ -121,11 +121,11 @@ class ProfilePage extends StatelessWidget {
                                 fontSize: 16,
                               ),
                             ),
-                            FutureBuilder<DocumentSnapshot>(
-                              future: _firestore
+                            StreamBuilder<DocumentSnapshot>(
+                              stream: _firestore
                                   .collection('subscription')
                                   .doc(user?.uid)
-                                  .get(),
+                                  .snapshots(),
                               builder: (context, snapshot) {
                                 if (snapshot.connectionState ==
                                     ConnectionState.waiting) {
@@ -177,38 +177,57 @@ class ProfilePage extends StatelessWidget {
                               builder: (context, snapshot) {
                                 if (snapshot.connectionState ==
                                     ConnectionState.waiting) {
-                                  return CircularProgressIndicator(); // Show loader while fetching data
+                                  return CircularProgressIndicator();
                                 }
 
-                                if (!snapshot.hasData ||
-                                    !snapshot.data!.exists) {
-                                  return Text(
-                                    "3 images",
-                                    style: TextStyle(
-                                        fontSize: 14, color: Colors.black),
-                                  );
+                                int planLimit = 3; // Default to 3 images
+                                String planLimitText = "$planLimit images";
+                                String paymentResult = "failure";
+
+                                if (snapshot.hasData && snapshot.data!.exists) {
+                                  var subscriptionData = snapshot.data!;
+                                  paymentResult =
+                                      subscriptionData['paymentResult'] ??
+                                          "failure";
+                                  String subtitle =
+                                      subscriptionData['subtitle'] ?? "";
+
+                                  if (paymentResult == "success") {
+                                    RegExp regExp = RegExp(r'(\d+)\s*image');
+                                    Match? match = regExp.firstMatch(subtitle);
+                                    planLimit = match != null
+                                        ? int.parse(match.group(1)!)
+                                        : 3;
+                                    planLimitText = "$planLimit images";
+                                  }
                                 }
 
-                                var subscriptionData = snapshot.data!;
-                                String paymentResult =
-                                    subscriptionData['paymentResult'] ?? "FREE";
-                                String subtitle =
-                                    subscriptionData['subtitle'] ??
-                                        "3 images"; // Default if missing
+                                return FutureBuilder<DocumentSnapshot>(
+                                  future: _firestore
+                                      .collection('subscriptionDetails')
+                                      .doc('subscriptionInfo')
+                                      .get(),
+                                  builder: (context, defaultSnapshot) {
+                                    if (defaultSnapshot.connectionState ==
+                                        ConnectionState.waiting) {
+                                      return CircularProgressIndicator();
+                                    }
 
-                                // Extract the number before "image" using regex
-                                RegExp regExp = RegExp(r'(\d+)\s*image');
-                                Match? match = regExp.firstMatch(subtitle);
-                                String extractedText = match != null
-                                    ? "${match.group(1)} images"
-                                    : "3 images";
+                                    int defaultImage = int.tryParse(
+                                            defaultSnapshot
+                                                .data!['defaultImage']
+                                                .toString()) ??
+                                        3;
 
-                                return Text(
-                                  paymentResult == "success"
-                                      ? extractedText
-                                      : "3 images",
-                                  style: TextStyle(
-                                      fontSize: 14, color: Colors.black),
+                                    if (paymentResult == "failure") {
+                                      planLimit = defaultImage;
+                                      planLimitText = "$defaultImage images";
+                                    }
+
+                                    return Text(planLimitText,
+                                        style: TextStyle(
+                                            fontSize: 14, color: Colors.black));
+                                  },
                                 );
                               },
                             ),
@@ -225,66 +244,113 @@ class ProfilePage extends StatelessWidget {
                             ),
                             StreamBuilder<DocumentSnapshot>(
                               stream: _firestore
-                                  .collection('subscription')
-                                  .doc(user?.uid)
+                                  .collection('subscriptionDetails')
+                                  .doc('subscriptionInfo')
                                   .snapshots(),
-                              builder: (context, subscriptionSnapshot) {
-                                if (subscriptionSnapshot.connectionState ==
+                              builder: (context, defaultSnapshot) {
+                                if (defaultSnapshot.connectionState ==
                                     ConnectionState.waiting) {
                                   return CircularProgressIndicator();
                                 }
 
-                                // Default first time (if no subscription data)
-                                if (!subscriptionSnapshot.hasData ||
-                                    !subscriptionSnapshot.data!.exists) {
-                                  return _showUpgradeNow(context);
+                                if (!defaultSnapshot.hasData ||
+                                    !defaultSnapshot.data!.exists) {
+                                  return Text(
+                                    "Fetching...",
+                                    style: TextStyle(
+                                        fontSize: 14, color: Colors.black),
+                                  );
                                 }
 
-                                var subscriptionData =
-                                    subscriptionSnapshot.data!;
-                                String paymentResult =
-                                    subscriptionData['paymentResult'] ?? "";
-
-                                // If payment is NOT "success", show default "3/3 Upgrade Now"
-                                if (paymentResult != "success") {
-                                  return _showUpgradeNow(context);
-                                }
+                                int defaultImage = int.tryParse(defaultSnapshot
+                                        .data!['defaultImage']
+                                        .toString()) ??
+                                    5;
 
                                 return StreamBuilder<DocumentSnapshot>(
                                   stream: _firestore
-                                      .collection('users')
+                                      .collection('subscription')
                                       .doc(user?.uid)
                                       .snapshots(),
-                                  builder: (context, userSnapshot) {
-                                    if (userSnapshot.connectionState ==
+                                  builder: (context, subscriptionSnapshot) {
+                                    if (subscriptionSnapshot.connectionState ==
                                         ConnectionState.waiting) {
                                       return CircularProgressIndicator();
                                     }
 
-                                    if (!userSnapshot.hasData ||
-                                        !userSnapshot.data!.exists) {
-                                      return _showUpgradeNow(context);
+                                    int planLimit = defaultImage;
+                                    String paymentResult = "failure";
+
+                                    if (subscriptionSnapshot.hasData &&
+                                        subscriptionSnapshot.data!.exists) {
+                                      var subscriptionData =
+                                          subscriptionSnapshot.data!;
+                                      paymentResult =
+                                          subscriptionData['paymentResult'] ??
+                                              "failure";
+                                      String subtitle =
+                                          subscriptionData['subtitle'] ?? "";
+
+                                      if (paymentResult == "success") {
+                                        RegExp regExp =
+                                            RegExp(r'(\d+)\s*image');
+                                        Match? match =
+                                            regExp.firstMatch(subtitle);
+                                        planLimit = match != null
+                                            ? int.parse(match.group(1)!)
+                                            : defaultImage;
+                                      }
                                     }
 
-                                    var userData = userSnapshot.data!;
-                                    int imageCount = int.tryParse(
-                                            userData['imagecount']
-                                                .toString()) ??
-                                        3; // Default to 3
+                                    return StreamBuilder<DocumentSnapshot>(
+                                      stream: _firestore
+                                          .collection('users')
+                                          .doc(user?.uid)
+                                          .snapshots(),
+                                      builder: (context, userSnapshot) {
+                                        if (userSnapshot.connectionState ==
+                                            ConnectionState.waiting) {
+                                          return CircularProgressIndicator();
+                                        }
 
-                                    int remainingPrompts =
-                                        3 - imageCount; // Correct calculation
+                                        if (!userSnapshot.hasData ||
+                                            !userSnapshot.data!.exists) {
+                                          return _showUpgradeNow(context);
+                                        }
 
-                                    // ✅ Fix: Only show "3/3 Upgrade Now" when `imageCount == 3`
-                                    if (imageCount == 3) {
-                                      return _showUpgradeNow(context);
-                                    } else {
-                                      return Text(
-                                        "$remainingPrompts image${remainingPrompts > 1 ? 's' : ''}",
-                                        style: TextStyle(
-                                            fontSize: 14, color: Colors.black),
-                                      );
-                                    }
+                                        var userData = userSnapshot.data!;
+                                        int imageCount = int.tryParse(
+                                                userData['imagecount']
+                                                    .toString()) ??
+                                            0;
+                                        int remainingPrompts;
+
+                                        if (paymentResult == "success") {
+                                          remainingPrompts = planLimit -
+                                              (imageCount - defaultImage);
+                                        } else {
+                                          remainingPrompts =
+                                              defaultImage - imageCount;
+                                        }
+
+                                        if (remainingPrompts <= 0) {
+                                          return Text(
+                                            "$planLimit/$planLimit Upgrade Now",
+                                            style: TextStyle(
+                                                fontSize: 14,
+                                                color: Colors.red,
+                                                fontWeight: FontWeight.bold),
+                                          );
+                                        } else {
+                                          return Text(
+                                            "$remainingPrompts image${remainingPrompts > 1 ? 's' : ''}",
+                                            style: TextStyle(
+                                                fontSize: 14,
+                                                color: Colors.black),
+                                          );
+                                        }
+                                      },
+                                    );
                                   },
                                 );
                               },

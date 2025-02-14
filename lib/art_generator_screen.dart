@@ -40,6 +40,7 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
   final TextEditingController _textController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final FocusNode _focusNode = FocusNode();
+  int base = 5;
   int defaultCredits = 0;
   int imageCount = 0;
   int extraCredits = 0;
@@ -57,6 +58,7 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
   @override
   void initState() {
     super.initState();
+    fetchDefaultImage();
     fetchInitialCredits();
     _fetchApiKey();
   }
@@ -142,11 +144,32 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
     return match != null ? int.parse(match.group(0)!) : 0;
   }
 
+  void fetchDefaultImage() async {
+    try {
+      DocumentSnapshot snapshot = await FirebaseFirestore.instance
+          .collection('subscriptionDetails')
+          .doc('subscriptionInfo')
+          .get();
+
+      if (snapshot.exists) {
+        int fetchedBase =
+            snapshot.get('defaultImage') ?? 5; // Default to 5 if not found
+        setState(() {
+          base = fetchedBase;
+        });
+        updateRemainingCredits(); // Call after fetching
+      }
+    } catch (e) {
+      print("Error fetching defaultImage: $e");
+    }
+  }
+
   void updateRemainingCredits() {
     if (!isImageCountAvailable) {
       remainingCredits = defaultCredits;
       return;
     }
+
     int creditsUsed = imageCount * 5;
     int newRemainingCredits = defaultCredits - creditsUsed;
 
@@ -155,11 +178,11 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
     // Apply extraCredits when needed
     if (newRemainingCredits == 0 && isSubscribed && extraCredits > 0) {
       print("Applying Extra Credits: $extraCredits");
-      // Calculate adjusted image count with base 3
-      int base = 3;
+
       int adjustedImageCount = imageCount - base;
       if (adjustedImageCount < 0) adjustedImageCount = 0;
       int creditsUsedFromExtra = adjustedImageCount * 5;
+
       newRemainingCredits = extraCredits - creditsUsedFromExtra;
       if (newRemainingCredits < 0) {
         newRemainingCredits = 0;
@@ -169,7 +192,8 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
     setState(() {
       remainingCredits = newRemainingCredits;
     });
-    print("Applying Extra Credits: $remainingCredits");
+
+    print("Final Remaining Credits: $remainingCredits");
   }
 
   Future<void> _fetchApiKey() async {
@@ -414,7 +438,7 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
           ? int.tryParse(userDoc.get('imagecount').toString()) ?? 0
           : 0;
 
-      if (imageCount < 3) {
+      if (imageCount < base) {
         // Generate image and increment image count for the first 3 images
         await generateArt(prompt, aspectRatioName);
       } else {
