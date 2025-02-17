@@ -92,7 +92,7 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
   void listenToImageCountChanges() {
     if (uid.isNotEmpty) {
       FirebaseFirestore.instance
-          .collection('users')
+          .collection('genArt-credits')
           .doc(uid)
           .snapshots()
           .listen((snapshot) {
@@ -118,7 +118,7 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
   void listenToSubscriptionChanges() {
     if (uid.isNotEmpty) {
       FirebaseFirestore.instance
-          .collection('subscription')
+          .collection('genArt-subscription')
           .doc(uid)
           .snapshots()
           .listen((snapshot) {
@@ -431,7 +431,7 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
       }
 
       DocumentReference userDocRef =
-          _firestore.collection('users').doc(user.uid);
+          _firestore.collection('genArt-credits').doc(user.uid);
       DocumentSnapshot userDoc = await userDocRef.get();
 
       int imageCount = userDoc.exists
@@ -443,8 +443,10 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
         await generateArt(prompt, aspectRatioName);
       } else {
         // Check subscription status for the 4th image and beyond
-        DocumentSnapshot subscriptionDoc =
-            await _firestore.collection('subscription').doc(user.uid).get();
+        DocumentSnapshot subscriptionDoc = await _firestore
+            .collection('genArt-subscription')
+            .doc(user.uid)
+            .get();
 
         if (subscriptionDoc.exists) {
           String paymentResult =
@@ -527,15 +529,23 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
         return;
       }
 
-      DocumentReference userDoc = _firestore.collection('users').doc(user.uid);
+      DocumentReference userDoc =
+          _firestore.collection('genArt-credits').doc(user.uid);
 
       // Get current image count
       DocumentSnapshot snapshot = await userDoc.get();
 
       int currentCount = 0;
       if (snapshot.exists && snapshot.data() != null) {
-        currentCount =
-            (snapshot.data() as Map<String, dynamic>)['imagecount'] ?? 0;
+        var data = snapshot.data() as Map<String, dynamic>;
+        if (data.containsKey('imagecount')) {
+          currentCount = int.tryParse(data['imagecount'].toString()) ?? 0;
+        }
+      } else {
+        // Create a new document with initial count if it doesn't exist
+        await userDoc.set({'imagecount': 1});
+        showToast("New document created with imagecount 1");
+        return;
       }
 
       // Increment image count

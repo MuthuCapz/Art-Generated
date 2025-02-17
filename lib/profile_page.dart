@@ -25,7 +25,7 @@ class ProfilePage extends StatelessWidget {
         centerTitle: true,
       ),
       body: FutureBuilder<DocumentSnapshot>(
-        future: _firestore.collection('users').doc(user?.uid).get(),
+        future: _firestore.collection('genArt-users').doc(user?.uid).get(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return Center(child: CircularProgressIndicator());
@@ -123,7 +123,7 @@ class ProfilePage extends StatelessWidget {
                             ),
                             StreamBuilder<DocumentSnapshot>(
                               stream: _firestore
-                                  .collection('subscription')
+                                  .collection('genArt-subscription')
                                   .doc(user?.uid)
                                   .snapshots(),
                               builder: (context, snapshot) {
@@ -171,7 +171,7 @@ class ProfilePage extends StatelessWidget {
                             ),
                             StreamBuilder<DocumentSnapshot>(
                               stream: _firestore
-                                  .collection('subscription')
+                                  .collection('genArt-subscription')
                                   .doc(user?.uid)
                                   .snapshots(),
                               builder: (context, snapshot) {
@@ -180,7 +180,7 @@ class ProfilePage extends StatelessWidget {
                                   return CircularProgressIndicator();
                                 }
 
-                                int planLimit = 3; // Default to 3 images
+                                int planLimit = 5; // Default to 5 images
                                 String planLimitText = "$planLimit images";
                                 String paymentResult = "failure";
 
@@ -197,14 +197,14 @@ class ProfilePage extends StatelessWidget {
                                     Match? match = regExp.firstMatch(subtitle);
                                     planLimit = match != null
                                         ? int.parse(match.group(1)!)
-                                        : 3;
+                                        : 5;
                                     planLimitText = "$planLimit images";
                                   }
                                 }
 
                                 return FutureBuilder<DocumentSnapshot>(
                                   future: _firestore
-                                      .collection('subscriptionDetails')
+                                      .collection('genArt-subscriptionDetails')
                                       .doc('subscriptionInfo')
                                       .get(),
                                   builder: (context, defaultSnapshot) {
@@ -217,7 +217,7 @@ class ProfilePage extends StatelessWidget {
                                             defaultSnapshot
                                                 .data!['defaultImage']
                                                 .toString()) ??
-                                        3;
+                                        5;
 
                                     if (paymentResult == "failure") {
                                       planLimit = defaultImage;
@@ -244,7 +244,7 @@ class ProfilePage extends StatelessWidget {
                             ),
                             StreamBuilder<DocumentSnapshot>(
                               stream: _firestore
-                                  .collection('subscriptionDetails')
+                                  .collection('genArt-subscriptionDetails')
                                   .doc('subscriptionInfo')
                                   .snapshots(),
                               builder: (context, defaultSnapshot) {
@@ -269,7 +269,7 @@ class ProfilePage extends StatelessWidget {
 
                                 return StreamBuilder<DocumentSnapshot>(
                                   stream: _firestore
-                                      .collection('subscription')
+                                      .collection('genArt-subscription')
                                       .doc(user?.uid)
                                       .snapshots(),
                                   builder: (context, subscriptionSnapshot) {
@@ -304,7 +304,7 @@ class ProfilePage extends StatelessWidget {
 
                                     return StreamBuilder<DocumentSnapshot>(
                                       stream: _firestore
-                                          .collection('users')
+                                          .collection('genArt-credits')
                                           .doc(user?.uid)
                                           .snapshots(),
                                       builder: (context, userSnapshot) {
@@ -315,7 +315,12 @@ class ProfilePage extends StatelessWidget {
 
                                         if (!userSnapshot.hasData ||
                                             !userSnapshot.data!.exists) {
-                                          return _showUpgradeNow(context);
+                                          return Text(
+                                            "$planLimit images",
+                                            style: TextStyle(
+                                                fontSize: 14,
+                                                color: Colors.black),
+                                          );
                                         }
 
                                         var userData = userSnapshot.data!;
