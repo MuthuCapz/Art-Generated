@@ -67,7 +67,7 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
     if (uid.isNotEmpty) {
       try {
         DocumentSnapshot subscriptionSnapshot = await FirebaseFirestore.instance
-            .collection('subscriptionDetails')
+            .collection('genArt_subscriptionDetails')
             .doc('subscriptionInfo')
             .get();
 
@@ -92,7 +92,7 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
   void listenToImageCountChanges() {
     if (uid.isNotEmpty) {
       FirebaseFirestore.instance
-          .collection('genArt-credits')
+          .collection('genArt_credits')
           .doc(uid)
           .snapshots()
           .listen((snapshot) {
@@ -118,7 +118,7 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
   void listenToSubscriptionChanges() {
     if (uid.isNotEmpty) {
       FirebaseFirestore.instance
-          .collection('genArt-subscription')
+          .collection('genArt_subscription')
           .doc(uid)
           .snapshots()
           .listen((snapshot) {
@@ -147,7 +147,7 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
   void fetchDefaultImage() async {
     try {
       DocumentSnapshot snapshot = await FirebaseFirestore.instance
-          .collection('subscriptionDetails')
+          .collection('genArt_subscriptionDetails')
           .doc('subscriptionInfo')
           .get();
 
@@ -431,7 +431,7 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
       }
 
       DocumentReference userDocRef =
-          _firestore.collection('genArt-credits').doc(user.uid);
+          _firestore.collection('genArt_credits').doc(user.uid);
       DocumentSnapshot userDoc = await userDocRef.get();
 
       int imageCount = userDoc.exists
@@ -444,7 +444,7 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
       } else {
         // Check subscription status for the 4th image and beyond
         DocumentSnapshot subscriptionDoc = await _firestore
-            .collection('genArt-subscription')
+            .collection('genArt_subscription')
             .doc(user.uid)
             .get();
 
@@ -530,7 +530,7 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
       }
 
       DocumentReference userDoc =
-          _firestore.collection('genArt-credits').doc(user.uid);
+          _firestore.collection('genArt_credits').doc(user.uid);
 
       // Get current image count
       DocumentSnapshot snapshot = await userDoc.get();

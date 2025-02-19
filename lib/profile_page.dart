@@ -25,7 +25,7 @@ class ProfilePage extends StatelessWidget {
         centerTitle: true,
       ),
       body: FutureBuilder<DocumentSnapshot>(
-        future: _firestore.collection('genArt-users').doc(user?.uid).get(),
+        future: _firestore.collection('genArt_users').doc(user?.uid).get(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return Center(child: CircularProgressIndicator());
@@ -123,7 +123,7 @@ class ProfilePage extends StatelessWidget {
                             ),
                             StreamBuilder<DocumentSnapshot>(
                               stream: _firestore
-                                  .collection('genArt-subscription')
+                                  .collection('genArt_subscription')
                                   .doc(user?.uid)
                                   .snapshots(),
                               builder: (context, snapshot) {
@@ -171,7 +171,7 @@ class ProfilePage extends StatelessWidget {
                             ),
                             StreamBuilder<DocumentSnapshot>(
                               stream: _firestore
-                                  .collection('genArt-subscription')
+                                  .collection('genArt_subscription')
                                   .doc(user?.uid)
                                   .snapshots(),
                               builder: (context, snapshot) {
@@ -204,7 +204,7 @@ class ProfilePage extends StatelessWidget {
 
                                 return FutureBuilder<DocumentSnapshot>(
                                   future: _firestore
-                                      .collection('genArt-subscriptionDetails')
+                                      .collection('genArt_subscriptionDetails')
                                       .doc('subscriptionInfo')
                                       .get(),
                                   builder: (context, defaultSnapshot) {
@@ -244,7 +244,7 @@ class ProfilePage extends StatelessWidget {
                             ),
                             StreamBuilder<DocumentSnapshot>(
                               stream: _firestore
-                                  .collection('genArt-subscriptionDetails')
+                                  .collection('genArt_subscriptionDetails')
                                   .doc('subscriptionInfo')
                                   .snapshots(),
                               builder: (context, defaultSnapshot) {
@@ -269,7 +269,7 @@ class ProfilePage extends StatelessWidget {
 
                                 return StreamBuilder<DocumentSnapshot>(
                                   stream: _firestore
-                                      .collection('genArt-subscription')
+                                      .collection('genArt_subscription')
                                       .doc(user?.uid)
                                       .snapshots(),
                                   builder: (context, subscriptionSnapshot) {
@@ -304,7 +304,7 @@ class ProfilePage extends StatelessWidget {
 
                                     return StreamBuilder<DocumentSnapshot>(
                                       stream: _firestore
-                                          .collection('genArt-credits')
+                                          .collection('genArt_credits')
                                           .doc(user?.uid)
                                           .snapshots(),
                                       builder: (context, userSnapshot) {
@@ -492,28 +492,4 @@ class ProfilePage extends StatelessWidget {
       ),
     );
   }
-}
-
-/// ✅ Fix: Now `_showUpgradeNow()` receives `context`
-Widget _showUpgradeNow(BuildContext context) {
-  return Row(
-    children: [
-      Text("3/3", style: TextStyle(fontSize: 14, color: Colors.black)),
-      Icon(Icons.check_circle, color: Colors.green, size: 18),
-      SizedBox(width: 5),
-      GestureDetector(
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => SubscriptionPage()),
-          );
-        },
-        child: Text(
-          "Upgrade Now",
-          style: TextStyle(
-              color: Colors.blue, fontSize: 14, fontWeight: FontWeight.bold),
-        ),
-      ),
-    ],
-  );
 }

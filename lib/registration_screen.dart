@@ -75,7 +75,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   GoogleSignIn _googleSignIn = GoogleSignIn();
 
   Future<String> generateUserID() async {
-    final usersRef = FirebaseFirestore.instance.collection('genArt-users');
+    final usersRef = FirebaseFirestore.instance.collection('genArt_users');
     final querySnapshot = await usersRef.get();
 
     int userCount = querySnapshot.size; // Get current user count
@@ -107,7 +107,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
             DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now());
 
         DocumentReference userDocRef =
-            FirebaseFirestore.instance.collection('genArt-users').doc(user.uid);
+            FirebaseFirestore.instance.collection('genArt_users').doc(user.uid);
         DocumentSnapshot userDoc = await userDocRef.get();
 
         if (userDoc.exists) {
@@ -153,7 +153,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     try {
       // Check if the user already exists in Firestore
       QuerySnapshot userQuery = await FirebaseFirestore.instance
-          .collection('genArt-users')
+          .collection('genArt_users')
           .where('email', isEqualTo: email)
           .get();
 
@@ -163,7 +163,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         String userId = userDoc.id; // Get Firestore document ID
 
         await FirebaseFirestore.instance
-            .collection('genArt-users')
+            .collection('genArt_users')
             .doc(userId)
             .update({
           'loginDateTime':
@@ -196,7 +196,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
 
           // Store user details in Firestore
           await FirebaseFirestore.instance
-              .collection('genArt-users')
+              .collection('genArt_users')
               .doc(newUser.uid)
               .set({
             'email': email,

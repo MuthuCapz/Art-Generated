@@ -41,7 +41,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
   void fetchSubscriptionDetails() {
     try {
       FirebaseFirestore.instance
-          .collection('genArt-subscriptionDetails')
+          .collection('genArt_subscriptionDetails')
           .doc('subscriptionInfo')
           .snapshots()
           .listen((snapshot) {
@@ -139,7 +139,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
   Future<int> getAmount(String plan) async {
     try {
       DocumentSnapshot snapshot = await FirebaseFirestore.instance
-          .collection('genArt-subscriptionDetails')
+          .collection('genArt_subscriptionDetails')
           .doc('subscriptionInfo')
           .get();
 
@@ -348,7 +348,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
 
     try {
       DocumentSnapshot subscriptionSnapshot = await FirebaseFirestore.instance
-          .collection('genArt-subscriptionDetails')
+          .collection('genArt_subscriptionDetails')
           .doc('subscriptionInfo')
           .get();
 
@@ -396,7 +396,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
       };
 
       await FirebaseFirestore.instance
-          .collection("genArt-subscription")
+          .collection("genArt_subscription")
           .doc(uid)
           .set(subscriptionData);
 
@@ -404,18 +404,18 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
 
       Future.delayed(Duration(days: 30), () async {
         DocumentSnapshot userSubscription = await FirebaseFirestore.instance
-            .collection("genArt-subscription")
+            .collection("genArt_subscription")
             .doc(uid)
             .get();
 
         if (userSubscription.exists) {
           await FirebaseFirestore.instance
-              .collection("genArt-backupSubscription")
+              .collection("genArt_backupSubscription")
               .doc(uid)
               .set(userSubscription.data() as Map<String, dynamic>);
 
           await FirebaseFirestore.instance
-              .collection("genArt-subscription")
+              .collection("genArt_subscription")
               .doc(uid)
               .delete();
           print(
