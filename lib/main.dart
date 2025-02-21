@@ -1,14 +1,20 @@
 import 'package:flutter/material.dart';
+import 'app_lifecycle_service.dart';
 import 'splash_screen.dart';
 import 'package:firebase_core/firebase_core.dart';
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized(); // Ensures Flutter engine is ready
-  await Firebase.initializeApp(); // Initialize Firebase
-  runApp(GenifyApp());
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
+  final AppLifecycleService lifecycleService = AppLifecycleService();
+  runApp(GenifyApp(lifecycleService));
 }
 
 class GenifyApp extends StatelessWidget {
+  final AppLifecycleService lifecycleService;
+
+  GenifyApp(this.lifecycleService);
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -16,7 +22,7 @@ class GenifyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.deepPurple,
       ),
-      home: SplashScreen(), // Starting point
+      home: SplashScreen(),
     );
   }
 }

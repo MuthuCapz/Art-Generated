@@ -67,7 +67,7 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
     if (uid.isNotEmpty) {
       try {
         DocumentSnapshot subscriptionSnapshot = await FirebaseFirestore.instance
-            .collection('genArt_subscriptionDetails')
+            .collection('artgen_subscription_plans')
             .doc('subscriptionInfo')
             .get();
 
@@ -147,7 +147,7 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
   void fetchDefaultImage() async {
     try {
       DocumentSnapshot snapshot = await FirebaseFirestore.instance
-          .collection('genArt_subscriptionDetails')
+          .collection('artgen_subscription_plans')
           .doc('subscriptionInfo')
           .get();
 

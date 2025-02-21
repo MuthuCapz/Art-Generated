@@ -25,7 +25,7 @@ class ProfilePage extends StatelessWidget {
         centerTitle: true,
       ),
       body: FutureBuilder<DocumentSnapshot>(
-        future: _firestore.collection('genArt_users').doc(user?.uid).get(),
+        future: _firestore.collection('artgen_users').doc(user?.uid).get(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return Center(child: CircularProgressIndicator());

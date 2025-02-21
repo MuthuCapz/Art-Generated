@@ -75,7 +75,7 @@ class SplashScreen extends StatelessWidget {
               SizedBox(height: 54),
               // Get started button
               ElevatedButton(
-                onPressed: () {
+                onPressed: () async {
                   User? user = FirebaseAuth.instance.currentUser;
                   if (user != null) {
                     // User is already signed in, navigate to Main Page
