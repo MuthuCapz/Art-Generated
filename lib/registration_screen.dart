@@ -5,6 +5,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart'; // For date formatting
 import 'art_generator_screen.dart';
+import 'dart:async';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -52,6 +53,7 @@ class ArtGeneratorApp extends StatelessWidget {
           } else if (snapshot.hasError) {
             return ErrorApp(error: snapshot.error.toString());
           }
+
           return RegistrationScreen();
         },
       ),
@@ -71,9 +73,8 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   final TextEditingController _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _isPasswordVisible = false;
-
   GoogleSignIn _googleSignIn = GoogleSignIn();
-
+  Timer? _autoSignOutTimer;
   Future<String> generateUserID() async {
     final usersRef = FirebaseFirestore.instance.collection('artgen_users');
     final querySnapshot = await usersRef.get();
@@ -84,10 +85,9 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   }
 
   // Method to handle Google Sign-In
-  Future<void> _signInWithGoogle() async {
+  Future<void> _signInWithGoogle(BuildContext context) async {
     try {
-      await _googleSignIn.signOut();
-
+      await _googleSignIn.signOut(); // Ensure fresh login
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
       if (googleUser == null) return; // User canceled sign-in
 
@@ -105,29 +105,31 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       if (user != null) {
         String formattedDate =
             DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now());
-
         DocumentReference userDocRef =
             FirebaseFirestore.instance.collection('artgen_users').doc(user.uid);
         DocumentSnapshot userDoc = await userDocRef.get();
 
         if (userDoc.exists) {
-          // Update login date for existing user
-          await userDocRef.update({'updateDateTime': formattedDate});
+          // Update existing user login time
+          await userDocRef
+              .update({'updateDateTime': formattedDate, 'status': 'active'});
         } else {
-          // New user: Generate unique ID and store details
-          String userID =
-              await generateUserID(); // Ensure this generates a unique value
-
+          // New user setup
+          String userID = await generateUserID(); // Ensure unique user ID
           await userDocRef.set({
             'email': user.email,
             'status': 'active',
             'profile': user.photoURL ?? '',
             'username': user.displayName ?? '',
             'createDateTime': formattedDate,
+            'updateDateTime': formattedDate,
             'userID': userID,
             'uid': user.uid,
-          }, SetOptions(merge: true)); // Merges instead of overwriting
+          }, SetOptions(merge: true));
         }
+
+        // Start inactivity timer
+        startInactivityTimer(user.uid);
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Google Sign-In successful!')),
@@ -142,6 +144,48 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Google Sign-In failed: $e')),
       );
+    }
+  }
+
+// Function to start inactivity timer
+  void startInactivityTimer(String userId) {
+    _autoSignOutTimer?.cancel(); // Cancel any existing timer
+    _autoSignOutTimer = Timer(const Duration(days: 30), () async {
+      await FirebaseFirestore.instance
+          .collection('artgen_users')
+          .doc(userId)
+          .update({
+        'status': 'inactive',
+      });
+      await FirebaseAuth.instance.signOut();
+    });
+  }
+
+// Function to update activity (reset timer)
+  void updateActivity(String userId) async {
+    String formattedDate =
+        DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now());
+    await FirebaseFirestore.instance
+        .collection('artgen_users')
+        .doc(userId)
+        .update({
+      'updateDateTime': formattedDate,
+      'status': 'active',
+    });
+    startInactivityTimer(userId); // Reset inactivity timer
+  }
+
+  @override
+  void initState() {
+    super.initState();
+
+    // Fetch the current user safely
+    User? user = FirebaseAuth.instance.currentUser;
+
+    if (user != null) {
+      updateActivity(user.uid);
+    } else {
+      print("No user is signed in.");
     }
   }
 
@@ -169,6 +213,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
             .update({
           'updateDateTime':
               DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now()),
+          'status': 'active'
         });
 
         // Sign in the user
@@ -206,10 +251,11 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
             'username': _usernameController.text.trim(),
             'password': password,
             'createDateTime': formattedDate,
+            'updateDateTime': formattedDate,
             'userID': userID,
             'uid': newUser.uid,
           });
-
+          startInactivityTimer(newUser.uid);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Account created successfully!')),
           );
@@ -335,7 +381,9 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
 
                   // Google Sign-In Button
                   ElevatedButton.icon(
-                    onPressed: _signInWithGoogle,
+                    onPressed: () {
+                      _signInWithGoogle(context);
+                    },
                     icon: Image.asset(
                       'assets/images/google_logo.png',
                       height: 24,

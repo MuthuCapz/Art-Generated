@@ -6,15 +6,11 @@ import 'package:firebase_core/firebase_core.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
-  final AppLifecycleService lifecycleService = AppLifecycleService();
-  runApp(GenifyApp(lifecycleService));
+
+  runApp(GenifyApp());
 }
 
 class GenifyApp extends StatelessWidget {
-  final AppLifecycleService lifecycleService;
-
-  GenifyApp(this.lifecycleService);
-
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
