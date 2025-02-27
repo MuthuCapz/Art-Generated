@@ -40,14 +40,10 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
   final TextEditingController _textController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final FocusNode _focusNode = FocusNode();
-  int base = 5;
-  int defaultCredits = 0;
-  int imageCount = 0;
-  int extraCredits = 0;
+
   int remainingCredits = 0;
   String uid = FirebaseAuth.instance.currentUser?.uid ?? "";
-  bool isSubscribed = false;
-  bool isImageCountAvailable = false;
+
   String selectedAspectRatio = 'square';
   String? _generatedImageUrl;
   bool _isLoading = false;
@@ -58,142 +54,39 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
   @override
   void initState() {
     super.initState();
-    fetchDefaultImage();
+
     fetchInitialCredits();
     _fetchApiKey();
   }
 
-  Future<void> fetchInitialCredits() async {
-    if (uid.isNotEmpty) {
-      try {
-        DocumentSnapshot subscriptionSnapshot = await FirebaseFirestore.instance
-            .collection('artgen_subscription_plans')
-            .doc('subscriptionInfo')
-            .get();
-
-        int fetchedCredits = int.tryParse(
-                subscriptionSnapshot.get('defaultCredits').toString()) ??
-            0;
-
-        setState(() {
-          defaultCredits = fetchedCredits;
-          remainingCredits = fetchedCredits;
-        });
-
-        // Start real-time listeners AFTER fetching defaultCredits
-        listenToImageCountChanges();
-        listenToSubscriptionChanges();
-      } catch (e) {
-        print("Error fetching default credits: $e");
-      }
-    }
-  }
-
-  void listenToImageCountChanges() {
+  void fetchInitialCredits() {
     if (uid.isNotEmpty) {
       FirebaseFirestore.instance
-          .collection('genArt_credits')
+          .collection('artgen_user_subscriptions')
           .doc(uid)
           .snapshots()
-          .listen((snapshot) {
-        if (snapshot.exists) {
-          int newImageCount =
-              int.tryParse(snapshot.get('imagecount').toString()) ?? 0;
+          .listen((DocumentSnapshot subscriptionSnapshot) {
+        if (subscriptionSnapshot.exists) {
+          Map<String, dynamic> data =
+              subscriptionSnapshot.data() as Map<String, dynamic>;
+
+          int fetchedCredits = 0;
+
+          if (data.containsKey('balance_credits')) {
+            fetchedCredits =
+                int.tryParse(data['balance_credits'].toString()) ?? 0;
+          } else if (data.containsKey('credits')) {
+            fetchedCredits = int.tryParse(data['credits'].toString()) ?? 0;
+          }
 
           setState(() {
-            imageCount = newImageCount;
-            isImageCountAvailable = true;
-            updateRemainingCredits();
-          });
-        } else {
-          setState(() {
-            isImageCountAvailable = false;
-            remainingCredits = defaultCredits;
-          });
-        }
-      });
-    }
-  }
-
-  void listenToSubscriptionChanges() {
-    if (uid.isNotEmpty) {
-      FirebaseFirestore.instance
-          .collection('genArt_subscription')
-          .doc(uid)
-          .snapshots()
-          .listen((snapshot) {
-        if (snapshot.exists) {
-          String paymentResult = snapshot.get('paymentResult') ?? '';
-          String subtitle = snapshot.get('subtitle') ?? '';
-
-          int extractedCredits = extractFirstNumber(subtitle);
-
-          setState(() {
-            isSubscribed = paymentResult == "success";
-            extraCredits = extractedCredits;
-            updateRemainingCredits(); // ✅ Update remaining credits dynamically
+            remainingCredits = fetchedCredits;
           });
         }
+      }, onError: (error) {
+        print("Error fetching real-time credits: $error");
       });
     }
-  }
-
-  int extractFirstNumber(String text) {
-    RegExp regExp = RegExp(r'\d+');
-    Match? match = regExp.firstMatch(text);
-    return match != null ? int.parse(match.group(0)!) : 0;
-  }
-
-  void fetchDefaultImage() async {
-    try {
-      DocumentSnapshot snapshot = await FirebaseFirestore.instance
-          .collection('artgen_subscription_plans')
-          .doc('subscriptionInfo')
-          .get();
-
-      if (snapshot.exists) {
-        int fetchedBase =
-            snapshot.get('defaultImage') ?? 5; // Default to 5 if not found
-        setState(() {
-          base = fetchedBase;
-        });
-        updateRemainingCredits(); // Call after fetching
-      }
-    } catch (e) {
-      print("Error fetching defaultImage: $e");
-    }
-  }
-
-  void updateRemainingCredits() {
-    if (!isImageCountAvailable) {
-      remainingCredits = defaultCredits;
-      return;
-    }
-
-    int creditsUsed = imageCount * 5;
-    int newRemainingCredits = defaultCredits - creditsUsed;
-
-    if (newRemainingCredits < 0) newRemainingCredits = 0;
-
-    // Apply extraCredits when needed
-    if (newRemainingCredits == 0 && isSubscribed && extraCredits > 0) {
-      print("Applying Extra Credits: $extraCredits");
-
-      int adjustedImageCount = imageCount - base;
-      if (adjustedImageCount < 0) adjustedImageCount = 0;
-      int creditsUsedFromExtra = adjustedImageCount * 5;
-
-      newRemainingCredits = extraCredits - creditsUsedFromExtra;
-      if (newRemainingCredits < 0) {
-        newRemainingCredits = 0;
-      }
-    }
-
-    setState(() {
-      remainingCredits = newRemainingCredits;
-    });
-
-    print("Final Remaining Credits: $remainingCredits");
   }
 
   Future<void> _fetchApiKey() async {
@@ -431,41 +324,92 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
       }
 
       DocumentReference userDocRef =
-          _firestore.collection('genArt_credits').doc(user.uid);
+          _firestore.collection('artgen_user_subscriptions').doc(user.uid);
       DocumentSnapshot userDoc = await userDocRef.get();
 
-      int imageCount = userDoc.exists
-          ? int.tryParse(userDoc.get('imagecount').toString()) ?? 0
-          : 0;
+      if (!userDoc.exists) {
+        showToast("User subscription data not found.");
+        return;
+      }
 
-      if (imageCount < base) {
-        // Generate image and increment image count for the first 3 images
-        await generateArt(prompt, aspectRatioName);
-      } else {
-        // Check subscription status for the 4th image and beyond
-        DocumentSnapshot subscriptionDoc = await _firestore
-            .collection('genArt_subscription')
-            .doc(user.uid)
-            .get();
+      Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
+      String planName = userData['plan_name'] ?? "Free";
+      int imageCount = int.tryParse(userData['imagecount'].toString()) ?? 5;
 
-        if (subscriptionDoc.exists) {
-          String paymentResult =
-              subscriptionDoc.get('paymentResult') ?? 'failed';
+      int balanceImage = userData.containsKey('balance_image')
+          ? int.tryParse(userData['balance_image'].toString()) ?? imageCount
+          : imageCount;
 
-          if (paymentResult == "success") {
-            // If subscription is successful, generate the image without showing the dialog
-            await generateArt(prompt, aspectRatioName);
-          } else {
-            // If subscription is not successful, show subscription prompt and do not generate image
-            showToast("Please subscribe to generate more images.");
-            _showSubscriptionPrompt();
-          }
+      // If balance_image is not present, initialize it as imageCount - 1
+      if (planName == "Free") {
+        if (!userData.containsKey('balance_image')) {
+          balanceImage = imageCount - 1;
+          await userDocRef.update({'balance_image': balanceImage});
         } else {
-          // If subscription data is not found, show subscription prompt and do not generate image
-          showToast("Subscription data not found.");
+          balanceImage -= 1; // Decrease by 1 each time
+          await userDocRef.update({'balance_image': balanceImage});
+        }
+
+        // If balance_image reaches 0, prompt for subscription
+        if (balanceImage >= 0) {
+          await generateArt(prompt, aspectRatioName);
+        } else {
           _showSubscriptionPrompt();
         }
+      } else {
+        DocumentSnapshot paymentDoc =
+            await _firestore.collection('artgen_payments').doc(user.uid).get();
+
+        if (!paymentDoc.exists ||
+            paymentDoc.get('payment_result') != "success") {
+          _showSubscriptionPrompt();
+          return;
+        }
+
+        if (!userData.containsKey('balance_image')) {
+          balanceImage = imageCount - 1;
+          await userDocRef.update({'balance_image': balanceImage});
+        } else {
+          balanceImage -= 1; // Decrease by 1 each time
+          await userDocRef.update({'balance_image': balanceImage});
+        }
+
+        // If balance_image reaches 0, prompt for subscription
+        if (balanceImage >= 0) {
+          await generateArt(prompt, aspectRatioName);
+        } else {
+          _showSubscriptionPrompt();
+          return;
+        }
       }
+
+      int credits = int.tryParse(userData['credits'].toString()) ?? 25;
+
+      int balanceCredits = userData.containsKey('balance_credits')
+          ? int.tryParse(userData['balance_credits'].toString()) ?? credits
+          : credits;
+
+      // Fetch credits per image from plans collection
+      DocumentSnapshot planDoc = await _firestore
+          .collection('artgen_subscription_plans')
+          .doc('plans')
+          .get();
+
+      int creditsPerImage =
+          int.tryParse(planDoc.get('credits_perimage').toString()) ?? 5;
+
+      if (!userData.containsKey('balance_credits')) {
+        balanceCredits = credits;
+        await userDocRef.update({'balance_credits': balanceCredits});
+      }
+      if (balanceCredits < creditsPerImage) {
+        _showSubscriptionPrompt();
+        return;
+      }
+
+      // Deduct credits for image generation
+      balanceCredits -= creditsPerImage;
+      await userDocRef.update({'balance_credits': balanceCredits});
     } catch (e) {
       showToast("Error accessing image count: $e");
     }
@@ -502,9 +446,6 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
           _generatedImageUrl = data['output_url'];
           _isLoading = false;
         });
-
-        // Update image count after successful generation
-        await _updateImageCount();
       } else {
         setState(() {
           _isLoading = false;
@@ -516,42 +457,6 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
         _isLoading = false;
       });
       showToast('Error: $e');
-    }
-  }
-
-  Future<void> _updateImageCount() async {
-    try {
-      // Get the current user's UID
-      User? user = FirebaseAuth.instance.currentUser;
-
-      if (user == null) {
-        showToast("User not logged in.");
-        return;
-      }
-
-      DocumentReference userDoc =
-          _firestore.collection('genArt_credits').doc(user.uid);
-
-      // Get current image count
-      DocumentSnapshot snapshot = await userDoc.get();
-
-      int currentCount = 0;
-      if (snapshot.exists && snapshot.data() != null) {
-        var data = snapshot.data() as Map<String, dynamic>;
-        if (data.containsKey('imagecount')) {
-          currentCount = int.tryParse(data['imagecount'].toString()) ?? 0;
-        }
-      } else {
-        // Create a new document with initial count if it doesn't exist
-        await userDoc.set({'imagecount': 1});
-        showToast("New document created with imagecount 1");
-        return;
-      }
-
-      // Increment image count
-      await userDoc.update({'imagecount': currentCount + 1});
-    } catch (e) {
-      showToast("Error updating image count: $e");
     }
   }
 

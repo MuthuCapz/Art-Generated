@@ -116,6 +116,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         } else {
           // New user setup
           String userID = await generateUserID(); // Ensure unique user ID
+          assignFreePlanToUser(user.uid);
           await userDocRef.set({
             'email': user.email,
             'status': 'active',
@@ -144,6 +145,49 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Google Sign-In failed: $e')),
       );
+    }
+  }
+
+  Future<Map<String, dynamic>?> getFreePlan() async {
+    FirebaseFirestore firestore = FirebaseFirestore.instance;
+
+    // Fetch the "free" plan document from "plans"
+    DocumentSnapshot freePlanSnapshot = await firestore
+        .collection('artgen_subscription_plans') // Main collection
+        .doc('plans') // Document inside collection
+        .get();
+
+    // Check if the document exists and contains the "free" plan
+    if (freePlanSnapshot.exists && freePlanSnapshot.data() != null) {
+      var data = freePlanSnapshot.data() as Map<String, dynamic>;
+
+      // Ensure the "free" plan data exists inside the "plans" document
+      if (data.containsKey('free')) {
+        return data['free']; // Get the free plan details
+      }
+    }
+
+    print("❌ No Free Plan found in Firestore!");
+    return null;
+  }
+
+  Future<void> assignFreePlanToUser(String userId) async {
+    FirebaseFirestore firestore = FirebaseFirestore.instance;
+
+    var freePlan = await getFreePlan();
+
+    if (freePlan != null) {
+      await firestore.collection('artgen_user_subscriptions').doc(userId).set({
+        'plan_id': freePlan['plan_id'],
+        'plan_name': freePlan['plan_name'],
+        'subscription_id': 'sub_${userId}',
+        'imagecount': freePlan['image_count'],
+        'credits': freePlan['credits'],
+      }, SetOptions(merge: true));
+
+      print("✅ Free Plan assigned to user $userId");
+    } else {
+      print("❌ Failed to assign Free Plan to user: $userId");
     }
   }
 
@@ -239,7 +283,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
               await generateUserID(); // Custom method for unique user ID
           String formattedDate =
               DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now());
-
+          assignFreePlanToUser(newUser.uid);
           // Store user details in Firestore
           await FirebaseFirestore.instance
               .collection('artgen_users')

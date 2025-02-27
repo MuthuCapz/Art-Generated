@@ -287,7 +287,6 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                         itemBuilder: (context, index) {
                           var plan =
                               plans[index].value as Map<String, dynamic>? ?? {};
-
                           String planId = plan['plan_id'] ?? 'Unknown';
                           String planName = plan['plan_name'] ?? 'No Name';
                           String amount = plan['amount'] ?? '\₹0';
@@ -299,91 +298,111 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                           String description =
                               plan['description'] ?? 'No description available';
 
+                          bool isFreePlan = amount == '₹0';
+
                           return GestureDetector(
-                            onTap: () {
-                              setState(() {
-                                selectedPlanId = planId;
-                              });
-                            },
-                            child: Container(
-                              margin: EdgeInsets.only(bottom: 12),
-                              padding: EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(16),
-                                color: selectedPlanId == planId
-                                    ? Colors.purpleAccent.withOpacity(0.2)
-                                    : Colors.white.withOpacity(0.7),
-                                border: Border.all(
-                                  color: selectedPlanId == planId
-                                      ? Colors.deepPurpleAccent
-                                      : Colors.transparent,
-                                  width: 2,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.grey.withOpacity(0.2),
-                                    blurRadius: 8,
-                                    offset: Offset(0, 4),
-                                  ),
-                                ],
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text(
-                                        planName,
-                                        style: TextStyle(
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.black),
+                            onTap: isFreePlan
+                                ? null
+                                : () {
+                                    setState(() {
+                                      selectedPlanId = planId;
+                                    });
+                                  },
+                            child: Stack(
+                              children: [
+                                Container(
+                                  margin: EdgeInsets.only(bottom: 12),
+                                  padding: EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(16),
+                                    color: selectedPlanId == planId
+                                        ? Colors.purpleAccent.withOpacity(0.2)
+                                        : Colors.white.withOpacity(0.7),
+                                    border: Border.all(
+                                      color: selectedPlanId == planId
+                                          ? Colors.deepPurpleAccent
+                                          : Colors.transparent,
+                                      width: 2,
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.grey.withOpacity(0.2),
+                                        blurRadius: 8,
+                                        offset: Offset(0, 4),
                                       ),
-                                      if (plan.containsKey('tag') &&
-                                          plan['tag'] != null &&
-                                          plan['tag'].toString().isNotEmpty)
-                                        Container(
-                                          padding: EdgeInsets.symmetric(
-                                              horizontal: 6, vertical: 3),
-                                          decoration: BoxDecoration(
-                                            color: Colors.orange,
-                                            borderRadius:
-                                                BorderRadius.circular(5),
-                                          ),
-                                          child: Text(
-                                            plan[
-                                                'tag'], // Fetching the tag dynamically
-                                            style: TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 12),
-                                          ),
-                                        ),
                                     ],
                                   ),
-                                  SizedBox(height: 5),
-                                  Text(
-                                    '$amount / $planDuration',
-                                    style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w500,
-                                        color: Colors.black87),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text(
+                                            planName,
+                                            style: TextStyle(
+                                                fontSize: 18,
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.black),
+                                          ),
+                                          if (plan.containsKey('tag') &&
+                                              plan['tag'] != null &&
+                                              plan['tag'].toString().isNotEmpty)
+                                            Container(
+                                              padding: EdgeInsets.symmetric(
+                                                  horizontal: 6, vertical: 3),
+                                              decoration: BoxDecoration(
+                                                color: Colors.orange,
+                                                borderRadius:
+                                                    BorderRadius.circular(5),
+                                              ),
+                                              child: Text(
+                                                plan['tag'],
+                                                style: TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 12),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                      SizedBox(height: 5),
+                                      Text(
+                                        '$amount / $planDuration',
+                                        style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w500,
+                                            color: Colors.black87),
+                                      ),
+                                      SizedBox(height: 6),
+                                      Text(
+                                        '$credits Credits',
+                                        style: TextStyle(
+                                            color: Colors.black54,
+                                            fontSize: 14),
+                                      ),
+                                      SizedBox(height: 6),
+                                      Text(
+                                        description,
+                                        style: TextStyle(
+                                            color: Colors.black54,
+                                            fontSize: 12),
+                                      ),
+                                    ],
                                   ),
-                                  SizedBox(height: 6),
-                                  Text(
-                                    '$credits Credits',
-                                    style: TextStyle(
-                                        color: Colors.black54, fontSize: 14),
+                                ),
+                                if (isFreePlan) // Apply blur effect on free plan
+                                  Positioned.fill(
+                                    child: BackdropFilter(
+                                      filter: ImageFilter.blur(
+                                          sigmaX: 5, sigmaY: 5),
+                                      child: Container(
+                                        color: Colors.white.withOpacity(0),
+                                      ),
+                                    ),
                                   ),
-                                  SizedBox(height: 6),
-                                  Text(
-                                    description,
-                                    style: TextStyle(
-                                        color: Colors.black54, fontSize: 12),
-                                  ),
-                                ],
-                              ),
+                              ],
                             ),
                           );
                         },
