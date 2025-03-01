@@ -70,23 +70,60 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
           Map<String, dynamic> data =
               subscriptionSnapshot.data() as Map<String, dynamic>;
 
-          int fetchedCredits = 0;
+          String planName =
+              data.containsKey('plan_name') ? data['plan_name'] : 'Free';
 
-          if (data.containsKey('balance_credits')) {
-            fetchedCredits =
-                int.tryParse(data['balance_credits'].toString()) ?? 0;
-          } else if (data.containsKey('credits')) {
-            fetchedCredits = int.tryParse(data['credits'].toString()) ?? 0;
+          if (planName == 'Free') {
+            updateCredits(data);
+          } else {
+            FirebaseFirestore.instance
+                .collection('artgen_payments')
+                .doc(uid)
+                .snapshots()
+                .listen((DocumentSnapshot paymentSnapshot) {
+              if (paymentSnapshot.exists) {
+                Map<String, dynamic> paymentData =
+                    paymentSnapshot.data() as Map<String, dynamic>;
+                String paymentResult = paymentData.containsKey('payment_result')
+                    ? paymentData['payment_result']
+                    : 'failure';
+
+                if (paymentResult == 'success') {
+                  updateCredits(data);
+                } else {
+                  setState(() {
+                    remainingCredits = 0;
+                  });
+                }
+              } else {
+                setState(() {
+                  remainingCredits = 0;
+                });
+              }
+            });
           }
-
+        } else {
           setState(() {
-            remainingCredits = fetchedCredits;
+            remainingCredits = 0;
           });
         }
       }, onError: (error) {
         print("Error fetching real-time credits: $error");
       });
     }
+  }
+
+  void updateCredits(Map<String, dynamic> data) {
+    int fetchedCredits = 0;
+    if (data.containsKey('balance_credits')) {
+      fetchedCredits = int.tryParse(data['balance_credits'].toString()) ?? 0;
+    } else if (data.containsKey('credits')) {
+      fetchedCredits = int.tryParse(data['credits'].toString()) ?? 0;
+    }
+
+    setState(() {
+      remainingCredits = fetchedCredits;
+    });
   }
 
   Future<void> _fetchApiKey() async {
@@ -277,13 +314,11 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
     try {
       final response = await http.get(Uri.parse(_generatedImageUrl!));
 
-      // Create a temporary directory
       final directory = await getTemporaryDirectory();
       final imagePath = File('${directory.path}/shared_image.png');
 
       imagePath.writeAsBytesSync(response.bodyBytes);
 
-      // Share the downloaded image
       await Share.shareXFiles([XFile(imagePath.path)],
           text: 'Check out this AI-generated art!');
     } catch (e) {
@@ -294,7 +329,6 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
   Future<void> _onGenerateButtonPressed() async {
     final prompt = _textController.text.trim();
     if (isValidPrompt(prompt)) {
-      // Unfocus the text field
       _focusNode.unfocus();
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -328,7 +362,7 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
       DocumentSnapshot userDoc = await userDocRef.get();
 
       if (!userDoc.exists) {
-        showToast("User subscription data not found.");
+        showToast("User subscription data not found. Please subscribe.");
         return;
       }
 
@@ -340,7 +374,6 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
           ? int.tryParse(userData['balance_image'].toString()) ?? imageCount
           : imageCount;
 
-      // If balance_image is not present, initialize it as imageCount - 1
       if (planName == "Free") {
         if (!userData.containsKey('balance_image')) {
           balanceImage = imageCount - 1;
@@ -350,7 +383,6 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
           await userDocRef.update({'balance_image': balanceImage});
         }
 
-        // If balance_image reaches 0, prompt for subscription
         if (balanceImage >= 0) {
           await generateArt(prompt, aspectRatioName);
         } else {
@@ -370,11 +402,10 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
           balanceImage = imageCount - 1;
           await userDocRef.update({'balance_image': balanceImage});
         } else {
-          balanceImage -= 1; // Decrease by 1 each time
+          balanceImage -= 1;
           await userDocRef.update({'balance_image': balanceImage});
         }
 
-        // If balance_image reaches 0, prompt for subscription
         if (balanceImage >= 0) {
           await generateArt(prompt, aspectRatioName);
         } else {
@@ -389,7 +420,6 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
           ? int.tryParse(userData['balance_credits'].toString()) ?? credits
           : credits;
 
-      // Fetch credits per image from plans collection
       DocumentSnapshot planDoc = await _firestore
           .collection('artgen_subscription_plans')
           .doc('plans')
@@ -407,7 +437,6 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
         return;
       }
 
-      // Deduct credits for image generation
       balanceCredits -= creditsPerImage;
       await userDocRef.update({'balance_credits': balanceCredits});
     } catch (e) {
@@ -467,13 +496,13 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
         return AlertDialog(
           title: Text("Subscription Required"),
           content: Text(
-              "You have reached the free limit. Please subscribe to generate more images."),
+              "You have reached the free limit or Your payment is failed. Please subscribe to generate more images."),
           actions: [
             TextButton(
               child: Text("Subscribe"),
               onPressed: () {
                 Navigator.of(context).pop();
-                // Navigate to the subscription page
+
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (context) => SubscriptionPage()),
@@ -561,14 +590,12 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
                 borderRadius: BorderRadius.circular(12.0),
                 child: _generatedImageUrl != null
                     ? AspectRatio(
-                        // Wrap with AspectRatio
-                        aspectRatio: _getAspectRatio(aspectRatioValues[
-                            selectedAspectRatio]!), // Use selected aspect ratio
+                        aspectRatio: _getAspectRatio(
+                            aspectRatioValues[selectedAspectRatio]!),
                         child: Image.network(
                           _generatedImageUrl!,
                           fit: BoxFit.cover,
-                          alignment:
-                              Alignment.center, // Important: Use BoxFit.cover
+                          alignment: Alignment.center,
                           loadingBuilder: (context, child, loadingProgress) {
                             if (loadingProgress == null) return child;
                             return Center(child: CircularProgressIndicator());
@@ -589,7 +616,7 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
                       ),
               ),
             ),
-            SizedBox(height: 16), // Added spacing between image and buttons
+            SizedBox(height: 16),
             if (_generatedImageUrl != null)
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -645,7 +672,6 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
                 ),
                 filled: true,
                 fillColor: Colors.grey[100],
-                // Soft background color
                 contentPadding: EdgeInsets.symmetric(
                   vertical: 20, // Adjust height
                   horizontal: 16, // Adjust horizontal padding
@@ -711,10 +737,8 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
                 ),
                 SizedBox(height: 8),
                 GridView.builder(
-                  shrinkWrap:
-                      true, // Ensures GridView doesn't take infinite height
-                  physics:
-                      NeverScrollableScrollPhysics(), // Disable scrolling inside the GridView
+                  shrinkWrap: true,
+                  physics: NeverScrollableScrollPhysics(),
                   gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 2, // 2 images per row
                     crossAxisSpacing: 8.0, // Spacing between columns
@@ -745,8 +769,7 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
                 ),
                 SizedBox(height: 8),
                 Padding(
-                  padding:
-                      const EdgeInsets.all(1.0), // Increased padding all around
+                  padding: const EdgeInsets.all(1.0),
                   child: Material(
                     elevation: 4.0,
                     borderRadius: BorderRadius.circular(8.0),
@@ -754,14 +777,11 @@ class _ArtGeneratorScreenState extends State<ArtGeneratorScreen> {
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(8.0),
                         color: Colors.white,
-                        border: Border.all(
-                            color: Colors.grey[300]!), // Added border
+                        border: Border.all(color: Colors.grey[300]!),
                       ),
-                      padding:
-                          const EdgeInsets.all(12.0), // Increased inner padding
+                      padding: const EdgeInsets.all(12.0),
                       child: Row(
-                        mainAxisSize:
-                            MainAxisSize.max, // Ensure Row takes full width
+                        mainAxisSize: MainAxisSize.max,
                         children: [
                           Expanded(
                             child: buildAspectRatioButton('square', '1:1'),

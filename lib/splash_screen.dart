@@ -9,7 +9,6 @@ class SplashScreen extends StatelessWidget {
     return Scaffold(
       body: Stack(
         children: [
-          // Full-screen background image
           Container(
             width: double.infinity,
             height: double.infinity,
@@ -36,11 +35,9 @@ class SplashScreen extends StatelessWidget {
           Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Row with circular image and text
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // Circular image
                   ClipOval(
                     child: Image.asset(
                       'assets/images/Genify-Ai.png',
@@ -50,7 +47,6 @@ class SplashScreen extends StatelessWidget {
                     ),
                   ),
                   SizedBox(width: 16),
-                  // Text next to the image
                   Text(
                     'Genify AI',
                     style: TextStyle(
@@ -62,7 +58,6 @@ class SplashScreen extends StatelessWidget {
                 ],
               ),
               SizedBox(height: 34),
-              // Subtitle text
               Text(
                 'Generate stunning AI images effortlessly \n with Genify AI',
                 style: TextStyle(
@@ -73,19 +68,16 @@ class SplashScreen extends StatelessWidget {
                 textAlign: TextAlign.center,
               ),
               SizedBox(height: 54),
-              // Get started button
               ElevatedButton(
                 onPressed: () async {
                   User? user = FirebaseAuth.instance.currentUser;
                   if (user != null) {
-                    // User is already signed in, navigate to Main Page
                     Navigator.pushReplacement(
                       context,
                       MaterialPageRoute(
                           builder: (context) => ArtGeneratorScreen()),
                     );
                   } else {
-                    // User is not signed in, navigate to Registration Screen
                     Navigator.pushReplacement(
                       context,
                       MaterialPageRoute(

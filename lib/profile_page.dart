@@ -90,8 +90,6 @@ class ProfilePage extends StatelessWidget {
                     ),
                   ),
                   SizedBox(height: 20),
-
-                  // Subscription Details
                   Container(
                     width: double.infinity,
                     padding: EdgeInsets.all(16),
@@ -123,19 +121,19 @@ class ProfilePage extends StatelessWidget {
                             ),
                             StreamBuilder<DocumentSnapshot>(
                               stream: _firestore
-                                  .collection('genArt_subscription')
+                                  .collection('artgen_user_subscriptions')
                                   .doc(user?.uid)
                                   .snapshots(),
                               builder: (context, snapshot) {
                                 if (snapshot.connectionState ==
                                     ConnectionState.waiting) {
-                                  return CircularProgressIndicator(); // Show loader while fetching data
+                                  return CircularProgressIndicator();
                                 }
 
                                 if (!snapshot.hasData ||
                                     !snapshot.data!.exists) {
                                   return Text(
-                                    "FREE",
+                                    "Free",
                                     style: TextStyle(
                                       color: Colors.deepPurple,
                                       fontWeight: FontWeight.bold,
@@ -145,11 +143,11 @@ class ProfilePage extends StatelessWidget {
                                 }
 
                                 var subscriptionData = snapshot.data!;
-                                String paymentResult =
-                                    subscriptionData['paymentResult'] ?? "FREE";
+                                String planName =
+                                    subscriptionData['plan_name'] ?? "Free";
 
                                 return Text(
-                                  paymentResult == "success" ? "PAID" : "FREE",
+                                  planName == "Free" ? "Free" : "Paid",
                                   style: TextStyle(
                                     color: Colors.deepPurple,
                                     fontWeight: FontWeight.bold,
@@ -171,62 +169,79 @@ class ProfilePage extends StatelessWidget {
                             ),
                             StreamBuilder<DocumentSnapshot>(
                               stream: _firestore
-                                  .collection('genArt_subscription')
+                                  .collection('artgen_user_subscriptions')
                                   .doc(user?.uid)
                                   .snapshots(),
-                              builder: (context, snapshot) {
-                                if (snapshot.connectionState ==
+                              builder: (context, subscriptionSnapshot) {
+                                if (subscriptionSnapshot.connectionState ==
                                     ConnectionState.waiting) {
                                   return CircularProgressIndicator();
                                 }
 
-                                int planLimit = 5; // Default to 5 images
-                                String planLimitText = "$planLimit images";
-                                String paymentResult = "failure";
-
-                                if (snapshot.hasData && snapshot.data!.exists) {
-                                  var subscriptionData = snapshot.data!;
-                                  paymentResult =
-                                      subscriptionData['paymentResult'] ??
-                                          "failure";
-                                  String subtitle =
-                                      subscriptionData['subtitle'] ?? "";
-
-                                  if (paymentResult == "success") {
-                                    RegExp regExp = RegExp(r'(\d+)\s*image');
-                                    Match? match = regExp.firstMatch(subtitle);
-                                    planLimit = match != null
-                                        ? int.parse(match.group(1)!)
-                                        : 5;
-                                    planLimitText = "$planLimit images";
-                                  }
+                                if (!subscriptionSnapshot.hasData ||
+                                    !subscriptionSnapshot.data!.exists) {
+                                  return Text(
+                                    "5 images",
+                                    style: TextStyle(
+                                        fontSize: 14, color: Colors.black),
+                                  );
                                 }
 
-                                return FutureBuilder<DocumentSnapshot>(
-                                  future: _firestore
-                                      .collection('genArt_subscriptionDetails')
-                                      .doc('subscriptionInfo')
-                                      .get(),
-                                  builder: (context, defaultSnapshot) {
-                                    if (defaultSnapshot.connectionState ==
+                                var subscriptionData =
+                                    subscriptionSnapshot.data!;
+                                String planName =
+                                    subscriptionData['plan_name'] ?? 'Free';
+                                int imageCount = int.tryParse(
+                                        subscriptionData['imagecount']
+                                            .toString()) ??
+                                    5;
+
+                                if (planName == 'Free') {
+                                  return Text(
+                                    "$imageCount images",
+                                    style: TextStyle(
+                                        fontSize: 14, color: Colors.black),
+                                  );
+                                }
+
+                                return StreamBuilder<DocumentSnapshot>(
+                                  stream: _firestore
+                                      .collection('artgen_payments')
+                                      .doc(user?.uid)
+                                      .snapshots(),
+                                  builder: (context, paymentSnapshot) {
+                                    if (paymentSnapshot.connectionState ==
                                         ConnectionState.waiting) {
                                       return CircularProgressIndicator();
                                     }
 
-                                    int defaultImage = int.tryParse(
-                                            defaultSnapshot
-                                                .data!['defaultImage']
-                                                .toString()) ??
-                                        5;
-
-                                    if (paymentResult == "failure") {
-                                      planLimit = defaultImage;
-                                      planLimitText = "$defaultImage images";
+                                    if (!paymentSnapshot.hasData ||
+                                        !paymentSnapshot.data!.exists) {
+                                      return Text(
+                                        "5 images",
+                                        style: TextStyle(
+                                            fontSize: 14, color: Colors.black),
+                                      );
                                     }
 
-                                    return Text(planLimitText,
+                                    var paymentData = paymentSnapshot.data!;
+                                    String paymentResult =
+                                        paymentData['payment_result'] ??
+                                            'failure';
+
+                                    if (paymentResult == 'success') {
+                                      return Text(
+                                        "$imageCount images",
                                         style: TextStyle(
-                                            fontSize: 14, color: Colors.black));
+                                            fontSize: 14, color: Colors.black),
+                                      );
+                                    } else {
+                                      return Text(
+                                        "5 images",
+                                        style: TextStyle(
+                                            fontSize: 14, color: Colors.black),
+                                      );
+                                    }
                                   },
                                 );
                               },
@@ -244,118 +259,71 @@ class ProfilePage extends StatelessWidget {
                             ),
                             StreamBuilder<DocumentSnapshot>(
                               stream: _firestore
-                                  .collection('genArt_subscriptionDetails')
-                                  .doc('subscriptionInfo')
+                                  .collection('artgen_user_subscriptions')
+                                  .doc(user?.uid)
                                   .snapshots(),
-                              builder: (context, defaultSnapshot) {
-                                if (defaultSnapshot.connectionState ==
+                              builder: (context, subscriptionSnapshot) {
+                                if (subscriptionSnapshot.connectionState ==
                                     ConnectionState.waiting) {
                                   return CircularProgressIndicator();
                                 }
 
-                                if (!defaultSnapshot.hasData ||
-                                    !defaultSnapshot.data!.exists) {
-                                  return Text(
-                                    "Fetching...",
-                                    style: TextStyle(
-                                        fontSize: 14, color: Colors.black),
-                                  );
+                                if (!subscriptionSnapshot.hasData ||
+                                    !subscriptionSnapshot.data!.exists) {
+                                  return upgradeNowText(context);
                                 }
 
-                                int defaultImage = int.tryParse(defaultSnapshot
-                                        .data!['defaultImage']
-                                        .toString()) ??
+                                var subscriptionData =
+                                    subscriptionSnapshot.data!.data()
+                                            as Map<String, dynamic>? ??
+                                        {};
+                                String planName =
+                                    subscriptionData['plan_name'] ?? 'Free';
+                                int imageCount = int.tryParse(
+                                        subscriptionData['imagecount']
+                                                ?.toString() ??
+                                            "5") ??
                                     5;
+                                int balanceImage = subscriptionData
+                                        .containsKey('balance_image')
+                                    ? int.tryParse(
+                                            subscriptionData['balance_image']
+                                                .toString()) ??
+                                        imageCount
+                                    : imageCount;
+
+                                if (planName == 'Free') {
+                                  return displayBalanceOrUpgrade(
+                                      context, balanceImage, imageCount);
+                                }
 
                                 return StreamBuilder<DocumentSnapshot>(
                                   stream: _firestore
-                                      .collection('genArt_subscription')
+                                      .collection('artgen_payments')
                                       .doc(user?.uid)
                                       .snapshots(),
-                                  builder: (context, subscriptionSnapshot) {
-                                    if (subscriptionSnapshot.connectionState ==
+                                  builder: (context, paymentSnapshot) {
+                                    if (paymentSnapshot.connectionState ==
                                         ConnectionState.waiting) {
                                       return CircularProgressIndicator();
                                     }
 
-                                    int planLimit = defaultImage;
-                                    String paymentResult = "failure";
-
-                                    if (subscriptionSnapshot.hasData &&
-                                        subscriptionSnapshot.data!.exists) {
-                                      var subscriptionData =
-                                          subscriptionSnapshot.data!;
-                                      paymentResult =
-                                          subscriptionData['paymentResult'] ??
-                                              "failure";
-                                      String subtitle =
-                                          subscriptionData['subtitle'] ?? "";
-
-                                      if (paymentResult == "success") {
-                                        RegExp regExp =
-                                            RegExp(r'(\d+)\s*image');
-                                        Match? match =
-                                            regExp.firstMatch(subtitle);
-                                        planLimit = match != null
-                                            ? int.parse(match.group(1)!)
-                                            : defaultImage;
-                                      }
+                                    if (!paymentSnapshot.hasData ||
+                                        !paymentSnapshot.data!.exists) {
+                                      return upgradeNowText(context);
                                     }
 
-                                    return StreamBuilder<DocumentSnapshot>(
-                                      stream: _firestore
-                                          .collection('genArt_credits')
-                                          .doc(user?.uid)
-                                          .snapshots(),
-                                      builder: (context, userSnapshot) {
-                                        if (userSnapshot.connectionState ==
-                                            ConnectionState.waiting) {
-                                          return CircularProgressIndicator();
-                                        }
+                                    var paymentData = paymentSnapshot.data!;
+                                    String paymentResult =
+                                        paymentData['payment_result'] ??
+                                            'failure';
 
-                                        if (!userSnapshot.hasData ||
-                                            !userSnapshot.data!.exists) {
-                                          return Text(
-                                            "$planLimit images",
-                                            style: TextStyle(
-                                                fontSize: 14,
-                                                color: Colors.black),
-                                          );
-                                        }
-
-                                        var userData = userSnapshot.data!;
-                                        int imageCount = int.tryParse(
-                                                userData['imagecount']
-                                                    .toString()) ??
-                                            0;
-                                        int remainingPrompts;
-
-                                        if (paymentResult == "success") {
-                                          remainingPrompts = planLimit -
-                                              (imageCount - defaultImage);
-                                        } else {
-                                          remainingPrompts =
-                                              defaultImage - imageCount;
-                                        }
-
-                                        if (remainingPrompts <= 0) {
-                                          return Text(
-                                            "$planLimit/$planLimit Upgrade Now",
-                                            style: TextStyle(
-                                                fontSize: 14,
-                                                color: Colors.red,
-                                                fontWeight: FontWeight.bold),
-                                          );
-                                        } else {
-                                          return Text(
-                                            "$remainingPrompts image${remainingPrompts > 1 ? 's' : ''}",
-                                            style: TextStyle(
-                                                fontSize: 14,
-                                                color: Colors.black),
-                                          );
-                                        }
-                                      },
-                                    );
+                                    if (paymentResult == 'success') {
+                                      return displayBalanceOrUpgrade(
+                                          context, balanceImage, imageCount);
+                                    } else {
+                                      return upgradeNowText(context);
+                                    }
                                   },
                                 );
                               },
@@ -365,10 +333,7 @@ class ProfilePage extends StatelessWidget {
                       ],
                     ),
                   ),
-
                   SizedBox(height: 20),
-
-                  // Upgrade Plan Button
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
@@ -424,10 +389,7 @@ class ProfilePage extends StatelessWidget {
                       ),
                     ),
                   ),
-
                   SizedBox(height: 20),
-
-                  // Logout Button
                   ElevatedButton.icon(
                     onPressed: () {
                       showDialog(
@@ -489,6 +451,46 @@ class ProfilePage extends StatelessWidget {
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget displayBalanceOrUpgrade(
+      BuildContext context, int balanceImage, int imageCount) {
+    if (balanceImage <= 0) {
+      return GestureDetector(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => SubscriptionPage()),
+          );
+        },
+        child: Text(
+          "$imageCount/$imageCount Upgrade Now",
+          style: TextStyle(
+              fontSize: 14, color: Colors.red, fontWeight: FontWeight.bold),
+        ),
+      );
+    }
+
+    return Text(
+      "$balanceImage image${balanceImage > 1 ? 's' : ''}",
+      style: TextStyle(fontSize: 14, color: Colors.black),
+    );
+  }
+
+  Widget upgradeNowText(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => SubscriptionPage()),
+        );
+      },
+      child: Text(
+        "Upgrade Now...",
+        style: TextStyle(
+            fontSize: 14, color: Colors.red, fontWeight: FontWeight.bold),
       ),
     );
   }

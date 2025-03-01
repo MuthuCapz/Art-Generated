@@ -3,7 +3,7 @@ import 'dart:ui';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-
+import 'package:fluttertoast/fluttertoast.dart';
 import 'package:intl/intl.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
 import 'art_generator_screen.dart';
@@ -28,9 +28,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
     _razorpay?.on(Razorpay.EVENT_EXTERNAL_WALLET, _handleExternalWallet);
 
     fetchHighestPricedPlan();
-    fetchRazorpayKey().then((_) {
-      print("Razorpay key fetched: $razorpayKey"); // Debugging
-    });
+    fetchRazorpayKey().then((_) {});
   }
 
   Future<void> fetchHighestPricedPlan() async {
@@ -89,7 +87,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
           .get();
 
       if (doc.exists) {
-        String encryptedKey = doc['key1']; // Fetch encrypted key from Firestore
+        String encryptedKey = doc['key1'];
         String decryptedKey =
             EncryptionHelper.decryptData(encryptedKey); // Decrypt it
 
@@ -132,7 +130,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
 
       var options = {
         'key': razorpayKey,
-        'amount': amountInPaise, // Razorpay requires amount in paise
+        'amount': amountInPaise,
         'name': 'Genify AI',
         'description': 'Subscription Plan',
       };
@@ -158,10 +156,8 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
       Map<String, dynamic> plansData =
           snapshot.data() as Map<String, dynamic>? ?? {};
 
-      // Debugging - Print the retrieved data
       print("Retrieved Plans Data: $plansData");
 
-      // Find the plan within the document
       Map<String, dynamic>? selectedPlan;
 
       plansData.forEach((key, value) {
@@ -175,7 +171,6 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
         return 0.0;
       }
 
-      // Debugging - Print the selected plan
       print("Selected Plan Data: $selectedPlan");
 
       String amountString = selectedPlan?['amount'] ?? '₹0';
@@ -187,13 +182,15 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
     }
   }
 
-  /// **Handle Successful Payment**
   void _handlePaymentSuccess(PaymentSuccessResponse response) {
     print("Payment Successful: ${response.paymentId}");
-    saveSubscriptionPlan("success"); // Save the subscription to Firestore
+    saveSubscriptionPlan("success");
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => ArtGeneratorScreen()),
+    );
   }
 
-  /// **Handle Payment Failure**
   void _handlePaymentError(PaymentFailureResponse response) {
     print("Payment Failed: ${response.message}");
     saveSubscriptionPlan("failure");
@@ -204,7 +201,6 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
     );
   }
 
-  /// **Handle External Wallet Payment**
   void _handleExternalWallet(ExternalWalletResponse response) {
     print("External Wallet Used: ${response.walletName}");
   }
@@ -229,7 +225,6 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
       ),
       body: Stack(
         children: [
-          // Light Gradient Background
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -243,7 +238,6 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
             child: Column(
               children: [
                 SizedBox(height: 20),
-                // App Logo & Title
                 CircleAvatar(
                   radius: 45,
                   backgroundImage: AssetImage('assets/images/Genify-Ai.png'),
@@ -258,7 +252,6 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                       color: Colors.black),
                 ),
                 SizedBox(height: 20),
-                // Fetching Plans
                 Expanded(
                   child: StreamBuilder<DocumentSnapshot>(
                     stream: FirebaseFirestore.instance
@@ -278,15 +271,23 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                       var plansData =
                           snapshot.data!.data() as Map<String, dynamic>? ?? {};
                       var plans = plansData.entries.toList();
-                      // Sorting Plans by plan_id
+
                       plans.sort((a, b) => a.key.compareTo(b.key));
 
                       return ListView.builder(
                         padding: EdgeInsets.symmetric(horizontal: 16),
                         itemCount: plans.length,
                         itemBuilder: (context, index) {
-                          var plan =
-                              plans[index].value as Map<String, dynamic>? ?? {};
+                          var entry = plans[index];
+
+                          if (entry.value is! Map<String, dynamic>) {
+                            print(
+                                "Unexpected data format for plan ${entry.key}: ${entry.value}");
+                            return SizedBox();
+                          }
+
+                          Map<String, dynamic> plan =
+                              entry.value as Map<String, dynamic>;
                           String planId = plan['plan_id'] ?? 'Unknown';
                           String planName = plan['plan_name'] ?? 'No Name';
                           String amount = plan['amount'] ?? '\₹0';
@@ -297,17 +298,22 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                               0;
                           String description =
                               plan['description'] ?? 'No description available';
-
                           bool isFreePlan = amount == '₹0';
 
                           return GestureDetector(
-                            onTap: isFreePlan
-                                ? null
-                                : () {
-                                    setState(() {
-                                      selectedPlanId = planId;
-                                    });
-                                  },
+                            onTap: () {
+                              if (isFreePlan) {
+                                Fluttertoast.showToast(
+                                  msg: "You are already using the free plan!",
+                                  toastLength: Toast.LENGTH_SHORT,
+                                  gravity: ToastGravity.BOTTOM,
+                                );
+                              } else {
+                                setState(() {
+                                  selectedPlanId = planId;
+                                });
+                              }
+                            },
                             child: Stack(
                               children: [
                                 Container(
@@ -392,16 +398,6 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                                     ],
                                   ),
                                 ),
-                                if (isFreePlan) // Apply blur effect on free plan
-                                  Positioned.fill(
-                                    child: BackdropFilter(
-                                      filter: ImageFilter.blur(
-                                          sigmaX: 5, sigmaY: 5),
-                                      child: Container(
-                                        color: Colors.white.withOpacity(0),
-                                      ),
-                                    ),
-                                  ),
                               ],
                             ),
                           );
@@ -410,7 +406,6 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                     },
                   ),
                 ),
-                // Continue Button
                 Padding(
                   padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   child: GestureDetector(
@@ -477,8 +472,9 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
 
     try {
       String uid = FirebaseAuth.instance.currentUser!.uid;
+      FirebaseFirestore firestore = FirebaseFirestore.instance;
 
-      DocumentSnapshot planSnapshot = await FirebaseFirestore.instance
+      DocumentSnapshot planSnapshot = await firestore
           .collection('artgen_subscription_plans')
           .doc('plans')
           .get();
@@ -495,7 +491,8 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
       Map<String, dynamic>? selectedPlan;
 
       plansData.forEach((category, planDetails) {
-        if (planDetails["plan_id"] == selectedPlanId) {
+        if (planDetails is Map<String, dynamic> &&
+            planDetails["plan_id"] == selectedPlanId) {
           selectedPlan = planDetails;
         }
       });
@@ -522,24 +519,20 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
       String formattedPaymentDate =
           DateFormat('yyyy-MM-dd HH:mm:ss').format(now);
 
-      await FirebaseFirestore.instance
-          .collection('artgen_user_subscriptions')
-          .doc(uid)
-          .set({
-        "subscription_id": "sub_${uid}",
+      await firestore.collection('artgen_user_subscriptions').doc(uid).delete();
+
+      await firestore.collection('artgen_user_subscriptions').doc(uid).set({
+        "subscription_id": "sub_$uid",
         "plan_id": selectedPlanId!,
         "plan_name": selectedPlan?['plan_name'],
         "imagecount": imageCount,
         "credits": credits,
         "subscriptionDateTime": formattedSubscriptionDate,
         "subscriptionEndDateTime": formattedEndDate,
-      }, SetOptions(merge: true));
+      });
 
-      await FirebaseFirestore.instance
-          .collection('artgen_payments')
-          .doc(uid)
-          .set({
-        "payment_id": "pay_${uid}",
+      await firestore.collection('artgen_payments').doc(uid).set({
+        "payment_id": "pay_$uid",
         "payment_result": paymentResult,
         "plan_id": selectedPlanId!,
         "payment_date": formattedPaymentDate,
@@ -548,6 +541,37 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
       }, SetOptions(merge: true));
 
       print("Subscription & payment data saved successfully.");
+
+      Future.delayed(Duration(days: 30), () async {
+        DocumentSnapshot userSubscription = await firestore
+            .collection("artgen_user_subscriptions")
+            .doc(uid)
+            .get();
+
+        if (userSubscription.exists) {
+          Map<String, dynamic>? userData =
+              userSubscription.data() as Map<String, dynamic>?;
+
+          if (userData != null) {
+            await firestore
+                .collection("artgen_backup_user_subscriptions")
+                .doc(uid)
+                .set({
+              "plan_id": userData["plan_id"],
+              "subscription_id": userData["subscription_id"],
+              "subscriptionDateTime": userData["subscriptionDateTime"],
+              "subscriptionEndDateTime": userData["subscriptionEndDateTime"],
+            }, SetOptions(merge: true));
+
+            await firestore
+                .collection("artgen_user_subscriptions")
+                .doc(uid)
+                .delete();
+            print(
+                "Subscription moved to backup and deleted from active collection.");
+          }
+        }
+      });
     } catch (e) {
       print("Error saving subscription/payment data: $e");
     }

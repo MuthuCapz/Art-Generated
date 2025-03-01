@@ -3,7 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:intl/intl.dart'; // For date formatting
+import 'package:intl/intl.dart';
 import 'art_generator_screen.dart';
 import 'dart:async';
 
@@ -79,17 +79,16 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     final usersRef = FirebaseFirestore.instance.collection('artgen_users');
     final querySnapshot = await usersRef.get();
 
-    int userCount = querySnapshot.size; // Get current user count
+    int userCount = querySnapshot.size;
 
-    return 'genArtuser${(userCount + 1).toString().padLeft(3, '0')}'; // Ensures genArtuser001 is first
+    return 'genArtuser${(userCount + 1).toString().padLeft(3, '0')}';
   }
 
-  // Method to handle Google Sign-In
   Future<void> _signInWithGoogle(BuildContext context) async {
     try {
-      await _googleSignIn.signOut(); // Ensure fresh login
+      await _googleSignIn.signOut();
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-      if (googleUser == null) return; // User canceled sign-in
+      if (googleUser == null) return;
 
       final GoogleSignInAuthentication googleAuth =
           await googleUser.authentication;
@@ -110,12 +109,10 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         DocumentSnapshot userDoc = await userDocRef.get();
 
         if (userDoc.exists) {
-          // Update existing user login time
           await userDocRef
               .update({'updateDateTime': formattedDate, 'status': 'active'});
         } else {
-          // New user setup
-          String userID = await generateUserID(); // Ensure unique user ID
+          String userID = await generateUserID();
           assignFreePlanToUser(user.uid);
           await userDocRef.set({
             'email': user.email,
@@ -129,7 +126,6 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
           }, SetOptions(merge: true));
         }
 
-        // Start inactivity timer
         startInactivityTimer(user.uid);
 
         ScaffoldMessenger.of(context).showSnackBar(
@@ -151,17 +147,14 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   Future<Map<String, dynamic>?> getFreePlan() async {
     FirebaseFirestore firestore = FirebaseFirestore.instance;
 
-    // Fetch the "free" plan document from "plans"
     DocumentSnapshot freePlanSnapshot = await firestore
-        .collection('artgen_subscription_plans') // Main collection
-        .doc('plans') // Document inside collection
+        .collection('artgen_subscription_plans')
+        .doc('plans')
         .get();
 
-    // Check if the document exists and contains the "free" plan
     if (freePlanSnapshot.exists && freePlanSnapshot.data() != null) {
       var data = freePlanSnapshot.data() as Map<String, dynamic>;
 
-      // Ensure the "free" plan data exists inside the "plans" document
       if (data.containsKey('free')) {
         return data['free']; // Get the free plan details
       }
@@ -185,15 +178,14 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         'credits': freePlan['credits'],
       }, SetOptions(merge: true));
 
-      print("✅ Free Plan assigned to user $userId");
+      print("Free Plan assigned to user $userId");
     } else {
-      print("❌ Failed to assign Free Plan to user: $userId");
+      print("Failed to assign Free Plan to user: $userId");
     }
   }
 
-// Function to start inactivity timer
   void startInactivityTimer(String userId) {
-    _autoSignOutTimer?.cancel(); // Cancel any existing timer
+    _autoSignOutTimer?.cancel();
     _autoSignOutTimer = Timer(const Duration(days: 30), () async {
       await FirebaseFirestore.instance
           .collection('artgen_users')
@@ -205,7 +197,6 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     });
   }
 
-// Function to update activity (reset timer)
   void updateActivity(String userId) async {
     String formattedDate =
         DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now());
@@ -216,14 +207,13 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       'updateDateTime': formattedDate,
       'status': 'active',
     });
-    startInactivityTimer(userId); // Reset inactivity timer
+    startInactivityTimer(userId);
   }
 
   @override
   void initState() {
     super.initState();
 
-    // Fetch the current user safely
     User? user = FirebaseAuth.instance.currentUser;
 
     if (user != null) {
@@ -240,16 +230,14 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     String password = _passwordController.text.trim();
 
     try {
-      // Check if the user already exists in Firestore
       QuerySnapshot userQuery = await FirebaseFirestore.instance
           .collection('artgen_users')
           .where('email', isEqualTo: email)
           .get();
 
       if (userQuery.docs.isNotEmpty) {
-        // User exists, update loginDateTime
         DocumentSnapshot userDoc = userQuery.docs.first;
-        String userId = userDoc.id; // Get Firestore document ID
+        String userId = userDoc.id;
 
         await FirebaseFirestore.instance
             .collection('artgen_users')
@@ -260,7 +248,6 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
           'status': 'active'
         });
 
-        // Sign in the user
         await _auth.signInWithEmailAndPassword(
             email: email, password: password);
 
@@ -273,18 +260,16 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
           MaterialPageRoute(builder: (context) => ArtGeneratorScreen()),
         );
       } else {
-        // If user does not exist, create a new account
         UserCredential newUserCredential = await _auth
             .createUserWithEmailAndPassword(email: email, password: password);
 
         User? newUser = newUserCredential.user;
         if (newUser != null) {
-          String userID =
-              await generateUserID(); // Custom method for unique user ID
+          String userID = await generateUserID();
           String formattedDate =
               DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now());
           assignFreePlanToUser(newUser.uid);
-          // Store user details in Firestore
+
           await FirebaseFirestore.instance
               .collection('artgen_users')
               .doc(newUser.uid)
@@ -409,7 +394,6 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                       padding: EdgeInsets.symmetric(vertical: 16),
                     ),
                   ),
-
                   SizedBox(height: 30),
                   Row(
                     children: [
@@ -422,8 +406,6 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                     ],
                   ),
                   SizedBox(height: 20),
-
-                  // Google Sign-In Button
                   ElevatedButton.icon(
                     onPressed: () {
                       _signInWithGoogle(context);
@@ -446,7 +428,6 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                       padding: EdgeInsets.symmetric(vertical: 14),
                     ),
                   ),
-
                   SizedBox(height: 40),
                 ],
               ),
