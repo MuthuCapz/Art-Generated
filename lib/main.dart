@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'app_lifecycle_service.dart';
+
 import 'splash_screen.dart';
 import 'package:firebase_core/firebase_core.dart';
 
